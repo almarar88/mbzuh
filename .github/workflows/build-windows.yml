@@ -1,0 +1,62 @@
+name: بناء الدينامو لويندوز
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "وسم الإصدار الذي سيُنشر (مثال v1.0.0)"
+        required: true
+        default: "v1.0.0"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: تثبيت الاعتماديات
+        run: npm ci
+
+      - name: فحص الأنواع
+        run: npm run typecheck
+
+      - name: بناء ملف التثبيت
+        run: npm run dist:win
+
+      - name: رفع ملف التثبيت كمُخرَج
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dynamo-Setup-Windows
+          path: release/Dynamo-Setup-*.exe
+          if-no-files-found: error
+
+      - name: نشر الإصدار
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: الدينامو ${{ github.event.inputs.tag || github.ref_name }}
+          files: release/Dynamo-Setup-*.exe
+          body: |
+            ## الدينامو — نظام الإدارة الأكاديمية الشامل
+
+            ملف تثبيت لويندوز (64-بت). نزّل `Dynamo-Setup-1.0.0.exe` وشغّله
+            واتبع خطوات التثبيت. التطبيق يعمل بقاعدة بيانات محلية على جهازك
+            بلا إنترنت وبلا خادم.
+
+            > قد يُظهر ويندوز تنبيه SmartScreen لأن الملف غير موقّع رقميًا —
+            > اختر «مزيد من المعلومات» ثم «تشغيل على أي حال».
+
+            ---
+            تطوير **Alcode**
