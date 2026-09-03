@@ -880,7 +880,12 @@
 
     applyTheme() {
       const s = state.settings;
-      document.body.className = `theme-${s.theme === 'light' ? 'light' : 'dark'} accent-${s.accent || 'violet'}`;
+      const body = document.body;
+      for (const c of [...body.classList]) {
+        if (c.startsWith('theme-') || c.startsWith('accent-')) body.classList.remove(c);
+      }
+      body.classList.add(`theme-${s.theme === 'light' ? 'light' : 'dark'}`);
+      body.classList.add(`accent-${s.accent || 'violet'}`);
     },
 
     setTheme(theme) { this.setSetting({ theme }); this.applyTheme(); },
@@ -888,6 +893,7 @@
     setAccent(accent) {
       this.setSetting({ accent });
       document.documentElement.style.removeProperty('--dyn');
+      document.body.classList.remove('dyn');
       this.applyTheme();
       this.render();
     },

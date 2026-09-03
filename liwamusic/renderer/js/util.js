@@ -134,7 +134,7 @@ window.LM = window.LM || {};
       actions.length ? foot : null);
 
     root.append(el('div', { class: 'modal-backdrop', onclick: close }), card);
-    const focusable = card.querySelector('input, textarea, button');
+    const focusable = card.querySelector('.modal-body input, .modal-body textarea');
     if (focusable) setTimeout(() => focusable.focus(), 40);
     return { close, card };
   }
