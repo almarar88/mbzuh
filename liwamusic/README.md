@@ -13,9 +13,9 @@
 
 ## ⬇️ التحميل
 
-**[⬇ تحميل LiwaMusic لويندوز (64-بت)](https://github.com/almarar88/mbzuh/releases/download/music-v1.0.0/LiwaMusic-Setup-1.0.0.exe)**
+[![آخر إصدار](https://img.shields.io/github/v/release/almarar88/mbzuh?filter=music-v*&label=%D8%A2%D8%AE%D8%B1%20%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1%20LiwaMusic&color=7c5cff)](https://github.com/almarar88/mbzuh/releases/tag/music-v1.0.0)
 
-أو من [صفحة إصدارات LiwaMusic](https://github.com/almarar88/mbzuh/releases?q=music-v) لاختيار إصدار محدد.
+**[⬇ تحميل LiwaMusic لويندوز (64-بت)](https://github.com/almarar88/mbzuh/releases/download/music-v1.0.0/LiwaMusic-Setup-1.0.0.exe)**
 
 بعد التنزيل: شغّل `LiwaMusic-Setup-1.0.0.exe` واتبع خطوات التثبيت (يُثبَّت
 للمستخدم الحالي بلا صلاحيات مدير)، ثم افتح **LiwaMusic** من قائمة ابدأ أو من
@@ -24,10 +24,28 @@
 > ويندوز قد يُظهر تنبيه SmartScreen لأن الملف غير موقّع رقميًا:
 > «مزيد من المعلومات» ← «تشغيل على أي حال».
 
-> **ملاحظة:** الرابط يعمل بعد نشر أول إصدار من سير عمل
-> [«بناء LiwaMusic لويندوز»](../.github/workflows/build-liwamusic.yml) — شغّله يدويًا
-> من تبويب Actions، أو ادفع الوسم `music-v1.0.0`. المستودع يضم مشروعين، لذا
-> الرابط أعلاه مربوط بوسم LiwaMusic تحديدًا لا بـ «آخر إصدار» في المستودع.
+### نشر أول إصدار (مرة واحدة)
+
+الرابط أعلاه يعطي **404** حتى يُنشر أول إصدار، لأن بناء ملف `.exe` يحتاج جهاز
+ويندوز — وسير العمل الجاهز يفعل ذلك تلقائيًا. اختر إحدى الطريقتين:
+
+**(أ) من سطر الأوامر — الأسرع:**
+
+```bash
+git fetch origin
+git tag music-v1.0.0 origin/claude/ai-music-player-app-8rg5ty
+git push origin music-v1.0.0
+```
+
+**(ب) من واجهة GitHub:** ادمج الفرع في `main`، ثم **Actions** ←
+«بناء LiwaMusic لويندوز» ← **Run workflow**.
+
+في الحالتين يبني GitHub المثبّت على ويندوز وينشره تحت الوسم `music-v1.0.0`
+خلال دقائق، فيعمل رابط التحميل أعلاه مباشرة. الإصدارات التالية: كرّر الخطوة
+بوسم جديد (`music-v1.1.0`) بعد رفع رقم الإصدار في `package.json`.
+
+> المستودع يضم مشروعين، لذا الرابط مربوط بوسم LiwaMusic تحديدًا لا بـ
+> «آخر إصدار» في المستودع.
 
 ## 🚀 البدء في 30 ثانية
 
