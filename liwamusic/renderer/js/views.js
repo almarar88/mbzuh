@@ -181,7 +181,7 @@
 
     wrap.append(pageHead('الرئيسية', `${stats.tracks} أغنية · ${stats.artists} فنان · ${stats.albums} ألبوم · ${fmtLong(stats.duration)}`, [
       btn('تشغيل عشوائي', { kind: 'primary', icon: ICONS.shuffle, onClick: () => app.playList(tracks.map((t) => t.id), { shuffle: true }) }),
-      btn('قائمة ذكية', { icon: ICONS.ai, onClick: () => app.askSmartPlaylist() }),
+      app.aiOn() ? btn('قائمة ذكية', { icon: ICONS.ai, onClick: () => app.askSmartPlaylist() }) : null,
     ]));
 
     wrap.append(el('div', { class: 'tiles' },
@@ -298,7 +298,7 @@
     const groups = groupBy(items, (t) => t.genre || (ud.ai[t.id] && ud.ai[t.id].genres && ud.ai[t.id].genres[0]) || 'غير مصنّف');
     const wrap = el('div', { class: 'page' });
     wrap.append(pageHead('الأنواع', `${groups.size} نوع`, [
-      btn('تصنيف ذكي للمكتبة', { icon: ICONS.ai, onClick: () => app.aiTagLibrary() }),
+      app.aiOn() ? btn('تصنيف ذكي للمكتبة', { icon: ICONS.ai, onClick: () => app.aiTagLibrary() }) : null,
     ]));
     const chips = el('div', { class: 'chips' });
     for (const [genre, list] of [...groups.entries()].sort((a, b) => b[1].length - a[1].length)) {
@@ -329,7 +329,7 @@
     wrap.append(pageHead('قوائم التشغيل', `${app.state.playlists.length} قائمة`, [
       btn('قائمة جديدة', { onClick: () => app.newPlaylist() }),
       btn('استيراد M3U', { onClick: () => app.importM3U() }),
-      btn('قائمة ذكية', { kind: 'primary', icon: ICONS.ai, onClick: () => app.askSmartPlaylist() }),
+      app.aiOn() ? btn('قائمة ذكية', { kind: 'primary', icon: ICONS.ai, onClick: () => app.askSmartPlaylist() }) : null,
     ]));
     if (!app.state.playlists.length) {
       wrap.append(el('div', { class: 'empty', text: 'لا توجد قوائم بعد. أنشئ واحدة أو اطلب من الذكاء الاصطناعي بناءها.' }));
@@ -380,7 +380,7 @@
     const wrap = el('div', { class: 'page' });
     wrap.append(pageHead('المفضلة', `${items.length} أغنية`, [
       btn('تشغيل', { kind: 'primary', icon: ICONS.play, onClick: () => app.playList(items.map((t) => t.id)) }),
-      btn('راديو مشابه', { icon: ICONS.radio, onClick: () => items[0] && app.aiRadio(items[0].id) }),
+      app.aiOn() ? btn('راديو مشابه', { icon: ICONS.radio, onClick: () => items[0] && app.aiRadio(items[0].id) }) : null,
     ]));
     if (!items.length) wrap.append(el('div', { class: 'empty', text: 'لم تضف أي أغنية للمفضلة بعد (اضغط ♥ بجانب الأغنية).' }));
     else wrap.append(trackList(app, items, { source: 'favorites' }));
@@ -414,7 +414,7 @@
     const tracks = app.state.tracks;
     const wrap = el('div', { class: 'page' });
     wrap.append(pageHead('الإحصاءات', 'نظرة على مكتبتك وعاداتك', [
-      btn('رؤى بالذكاء الاصطناعي', { kind: 'primary', icon: ICONS.ai, onClick: () => app.aiInsights() }),
+      app.aiOn() ? btn('رؤى بالذكاء الاصطناعي', { kind: 'primary', icon: ICONS.ai, onClick: () => app.aiInsights() }) : null,
       btn('كشف المكرر', { onClick: () => app.showDuplicates() }),
     ]));
     wrap.append(el('div', { class: 'tiles' },
@@ -423,7 +423,7 @@
       tile('مرات التشغيل', Object.values(ud.playCount).reduce((a, b) => a + b, 0), 'منذ التثبيت'),
       tile('المفضلة', Object.keys(ud.favorites).length, 'أغنية'),
       tile('بلا غلاف', tracks.filter((t) => !t.art).length, 'يمكن جلبها من الإنترنت'),
-      tile('موسومة بالذكاء', Object.keys(ud.ai).length, 'أغنية')));
+      app.aiOn() ? tile('موسومة بالذكاء', Object.keys(ud.ai).length, 'أغنية') : null));
 
     const byArtist = groupBy(tracks, (t) => t.artist || '—');
     const topArtists = [...byArtist.entries()]

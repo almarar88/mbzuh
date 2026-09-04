@@ -74,6 +74,7 @@
       try { state.aiStatus = await api.ai.status(); } catch { state.aiStatus = { hasKey: false }; }
 
       this.buildNav();
+      this.applyAiVisibility();
       this.wireChrome();
       this.wirePlayerControls();
       this.wireKeyboard();
@@ -98,10 +99,31 @@
     },
 
     // ————————————————————————————— الواجهة العامة
+    /** هل ميزات الذكاء الاصطناعي مفعّلة؟ (مغلقة افتراضيًا — تتطلب مفتاحًا مدفوعًا) */
+    aiOn() { return !!state.settings.aiEnabled; },
+
+    /** يُظهر أو يخفي كل مداخل الذكاء الاصطناعي في الواجهة. */
+    applyAiVisibility() {
+      const on = this.aiOn();
+      const searchBtn = $('#aiSearchBtn');
+      const plBtn = $('#btnAiPlaylist');
+      if (searchBtn) searchBtn.hidden = !on;
+      if (plBtn) plBtn.hidden = !on;
+      this.buildNav();
+    },
+
+    async setAiEnabled(on) {
+      await this.setSetting({ aiEnabled: !!on });
+      this.applyAiVisibility();
+      if (!on && state.view === 'ai') this.go('settings'); else this.render();
+      LM.toast(on ? 'فُعّلت ميزات الذكاء الاصطناعي.' : 'أُغلقت ميزات الذكاء الاصطناعي.', 'ok');
+    },
+
     buildNav() {
       const nav = $('#nav');
       nav.innerHTML = '';
       for (const item of NAV) {
+        if (item.id === 'ai' && !this.aiOn()) continue;
         nav.append(el('button', {
           class: `nav-item${state.view === item.id ? ' active' : ''}`,
           dataset: { view: item.id },
@@ -113,6 +135,7 @@
     },
 
     go(view) {
+      if (view === 'ai' && !this.aiOn()) view = 'settings';
       if (view !== 'tracks') state.filter.ids = null;
       state.view = view;
       $('#nav').querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
@@ -673,7 +696,7 @@
         '-',
         { label: ud.favorites[track.id] ? 'إزالة من المفضلة' : 'إضافة للمفضلة', onClick: () => this.toggleFavorite(track.id) },
         { label: 'إضافة إلى قائمة…', onClick: () => this.addToPlaylist([track.id]) },
-        { label: 'راديو مشابه (ذكاء اصطناعي)', onClick: () => this.aiRadio(track.id) },
+        ...(this.aiOn() ? [{ label: 'راديو مشابه (ذكاء اصطناعي)', onClick: () => this.aiRadio(track.id) }] : []),
         '-',
         { label: 'جلب الغلاف من الإنترنت', onClick: () => this.fetchArt(track.id) },
         { label: 'جلب الكلمات', onClick: () => { state.rpTab = 'lyrics'; this.setRpTab('lyrics'); this.fetchLyrics(track.id); } },
@@ -749,6 +772,11 @@
 
     // ————————————————————————————— الذكاء الاصطناعي
     async requireAi() {
+      if (!this.aiOn()) {
+        toast('ميزات الذكاء الاصطناعي مغلقة. فعّلها من الإعدادات (تتطلب مفتاح API مدفوعًا).', 'warn', 5000);
+        this.go('settings');
+        return false;
+      }
       if (state.aiStatus && state.aiStatus.hasKey) return true;
       toast('فعّل الذكاء الاصطناعي أولًا من صفحة «الذكاء الاصطناعي».', 'warn', 4200);
       this.go('ai');

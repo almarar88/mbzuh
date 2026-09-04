@@ -43,6 +43,7 @@ const DEFAULTS = {
     onlineMeta: false,
     watchFolders: true,
     sleepMinutes: 0,
+    aiEnabled: false,        // مغلق افتراضيًا — يتطلب مفتاح API مدفوع
     aiModel: 'claude-opus-5',
     aiKeySet: false,
     lastTrackId: null,

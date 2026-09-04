@@ -32,8 +32,8 @@
     wrap.append(tags);
 
     wrap.append(el('div', { class: 'rp-actions' },
-      V().btn('راديو مشابه', { icon: V().ICONS.radio, onClick: () => app.aiRadio(t.id) }),
-      V().btn('مقدّمة المذيع', { icon: V().ICONS.ai, onClick: () => app.aiDj(t.id) }),
+      app.aiOn() ? V().btn('راديو مشابه', { icon: V().ICONS.radio, onClick: () => app.aiRadio(t.id) }) : null,
+      app.aiOn() ? V().btn('مقدّمة المذيع', { icon: V().ICONS.ai, onClick: () => app.aiDj(t.id) }) : null,
       V().btn('جلب الغلاف', { onClick: () => app.fetchArt(t.id) })));
 
     if (meta && meta.summary) {
@@ -335,6 +335,14 @@
     const st = app.state.aiStatus || {};
     wrap.append(V().pageHead('الذكاء الاصطناعي', 'يعمل عبر Claude بمفتاحك الخاص — يُخزَّن مشفّرًا على جهازك ولا يُرسل لأي جهة أخرى.', []));
 
+    if (!app.aiOn()) {
+      wrap.append(el('div', { class: 'panel' },
+        el('h3', { text: 'الميزات الذكية مغلقة' }),
+        el('p', { class: 'muted', text: 'كل ميزات LiwaMusic الأخرى — الفهرسة والتشغيل والأغلفة والكلمات — تعمل بلا أي تكلفة. الميزات الذكية وحدها تحتاج مفتاح Anthropic API مدفوعًا بالاستخدام.' }),
+        V().btn('تفعيل الميزات الذكية', { kind: 'primary', onClick: () => app.setAiEnabled(true) })));
+      return wrap;
+    }
+
     if (!st.hasKey) {
       const input = el('input', { type: 'password', placeholder: 'sk-ant-…', autocomplete: 'off' });
       wrap.append(el('div', { class: 'panel' },
@@ -452,6 +460,12 @@
       toggleRow('جلب كلمات الأغاني تلقائيًا (LRCLIB)', s.onlineLyrics, (v) => app.setSetting({ onlineLyrics: v })),
       toggleRow('إثراء البيانات من MusicBrainz عند الطلب', s.onlineMeta, (v) => app.setSetting({ onlineMeta: v })),
       el('p', { class: 'muted xs', text: 'كل الطلبات تتم من جهازك مباشرة إلى الخدمات المذكورة، ولا يُرسل أي شيء لخوادم LiwaMusic (لا يوجد خادم أصلًا).' })));
+
+    // الميزات الذكية
+    wrap.append(el('div', { class: 'panel' },
+      el('h3', { text: 'الميزات الذكية (اختيارية ومغلقة افتراضيًا)' }),
+      el('p', { class: 'muted', text: 'القوائم بالوصف، البحث الدلالي، الراديو المشابه، التصنيف، ومقدّمات المذيع. تحتاج مفتاح Anthropic API مدفوعًا بالاستخدام — لا شيء يُرسل ولا يُحسب عليك ما دامت مغلقة.' }),
+      toggleRow('تفعيل ميزات الذكاء الاصطناعي', s.aiEnabled, (v) => app.setAiEnabled(v))));
 
     // المكتبة
     const folders = el('div', { class: 'folders' });
