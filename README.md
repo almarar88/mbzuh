@@ -180,4 +180,4 @@ npm run dist:win:zip # ينتج حزمة مضغوطة تعمل بلا تثبيت
 
 - التفاصيل والبناء: [`mizan_tools/README.md`](mizan_tools/README.md)
 - التحميل: ملفات `Mizan-*.apk` من [صفحة الإصدارات](https://github.com/almarar88/mbzuh/releases)
-- البناء التلقائي: ورك فلو [`build-android.yml`](.github/workflows/build-android.yml) يبني ويختبر وينشر الـAPK.
+- البناء التلقائي: ورك فلو [`build-mizan-android.yml`](.github/workflows/build-mizan-android.yml) يبني ويختبر وينشر الـAPK.

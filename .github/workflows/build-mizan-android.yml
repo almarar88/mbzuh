@@ -14,7 +14,7 @@ on:
       - main
     paths:
       - "mizan_tools/**"
-      - ".github/workflows/build-android.yml"
+      - ".github/workflows/build-mizan-android.yml"
   pull_request:
     paths:
       - "mizan_tools/**"
