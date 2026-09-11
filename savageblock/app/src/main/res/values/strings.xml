@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SavageBlock</string>
+    <string name="notification_channel_name">مراقبة الوقت</string>
+    <string name="notification_channel_description">إشعار دائم يشير إلى أن SavageBlock يراقب التطبيقات المحددة.</string>
+    <string name="notification_title">SavageBlock يراقبك</string>
+    <string name="notification_stop">إيقاف المراقبة</string>
+</resources>

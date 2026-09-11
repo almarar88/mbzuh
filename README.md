@@ -169,3 +169,12 @@ npm run dist:win:zip # ينتج حزمة مضغوطة تعمل بلا تثبيت
 **Alcode** · جميع الحقوق محفوظة © 2026
 
 </div>
+
+---
+
+## 📱 SavageBlock — تطبيق أندرويد (مشروع منفصل)
+
+في مجلد [`savageblock/`](savageblock/) يوجد مشروع أندرويد مستقل (Kotlin + Jetpack Compose):
+تطبيق «كافي تضييع» يراقب وقتك على تطبيقات التواصل ويغطي الشاشة بتهزيء عدواني
+عند تجاوز الحد. تفاصيل الميزات والبناء في [`savageblock/README.md`](savageblock/README.md).
+يُبنى تلقائيًا عبر workflow «بناء SavageBlock لأندرويد» في GitHub Actions.

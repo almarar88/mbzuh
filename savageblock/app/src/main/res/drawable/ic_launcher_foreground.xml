@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Brutalist "blocked" glyph: acid frame, crimson slash, white X. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer acid frame -->
+    <path
+        android:fillColor="#F5EE38"
+        android:pathData="M30,30 H78 V78 H30 Z" />
+    <!-- Inner void -->
+    <path
+        android:fillColor="#0A0A0A"
+        android:pathData="M35,35 H73 V73 H35 Z" />
+    <!-- Crimson diagonal strike -->
+    <path
+        android:fillColor="#FF2A55"
+        android:pathData="M38,66 L66,38 L70,42 L42,70 Z" />
+    <!-- Bone counter strike -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,42 L42,38 L70,66 L66,70 Z" />
+</vector>
