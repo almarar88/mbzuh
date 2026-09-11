@@ -169,3 +169,15 @@ npm run dist:win:zip # ينتج حزمة مضغوطة تعمل بلا تثبيت
 **Alcode** · جميع الحقوق محفوظة © 2026
 
 </div>
+
+---
+
+## 📱 ميزان — تطبيق أندرويد للأدوات اليومية
+
+مشروع ثانٍ في هذا المستودع داخل مجلد [`mizan_tools/`](mizan_tools/): تطبيق Flutter
+عربي (منبه، مؤقت، حاسبة، محول عملات بأسعار مباشرة، حاسبة عمر، تقويم هجري،
+ضريبة وخصم، محول وحدات) بوضع داكن ودعم للأجهزة القابلة للطي.
+
+- التفاصيل والبناء: [`mizan_tools/README.md`](mizan_tools/README.md)
+- التحميل: ملفات `Mizan-*.apk` من [صفحة الإصدارات](https://github.com/almarar88/mbzuh/releases)
+- البناء التلقائي: ورك فلو [`build-android.yml`](.github/workflows/build-android.yml) يبني ويختبر وينشر الـAPK.
