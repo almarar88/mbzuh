@@ -1,0 +1,84 @@
+name: بناء EarthOS لأندرويد (APK)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "وسم الإصدار الذي سيُنشر (مثال earthos-v1.0.0) — اتركه فارغًا لبناء المُخرَج فقط"
+        required: false
+        default: ""
+  push:
+    branches: ["**"]
+    paths:
+      - "earthos/**"
+      - ".github/workflows/build-android.yml"
+    tags:
+      - "earthos-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: earthos/android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-34 build-tools;34.0.0 platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      # Release signing: uses the repository secrets when present, otherwise falls back to the
+      # debug key (APK still installs; updates over a differently-signed build need an uninstall).
+      - name: تجهيز مفتاح التوقيع (اختياري)
+        if: ${{ env.EARTHOS_KEYSTORE_B64 != '' }}
+        env:
+          EARTHOS_KEYSTORE_B64: ${{ secrets.EARTHOS_KEYSTORE_B64 }}
+        run: echo "$EARTHOS_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/earthos.jks"
+
+      - name: بناء APK
+        env:
+          EARTHOS_KEYSTORE_PATH: ${{ secrets.EARTHOS_KEYSTORE_B64 != '' && format('{0}/earthos.jks', runner.temp) || '' }}
+          EARTHOS_KEYSTORE_PASSWORD: ${{ secrets.EARTHOS_KEYSTORE_PASSWORD }}
+          EARTHOS_KEY_ALIAS: ${{ secrets.EARTHOS_KEY_ALIAS }}
+          EARTHOS_KEY_PASSWORD: ${{ secrets.EARTHOS_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease assembleDebug --no-daemon
+
+      - name: رفع ملفات APK كمُخرَج
+        uses: actions/upload-artifact@v4
+        with:
+          name: EarthOS-APK
+          path: |
+            earthos/android/app/build/outputs/apk/release/EarthOS-*-release.apk
+            earthos/android/app/build/outputs/apk/debug/EarthOS-*-debug.apk
+          if-no-files-found: error
+
+      - name: نشر الإصدار
+        if: ${{ startsWith(github.ref, 'refs/tags/earthos-v') || github.event.inputs.tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: EarthOS ${{ github.event.inputs.tag || github.ref_name }}
+          files: earthos/android/app/build/outputs/apk/release/EarthOS-*-release.apk
+          body: |
+            ## مرآة الأرض — EarthOS // Planetary Twin Engine
+
+            تطبيق أندرويد (APK) لمحاكاة كوكب الأرض كتوأم رقمي: كرة أرضية بصور NASA
+            الحقيقية، شريط زمني +50 سنة، محرّكات تدخل مناخية، ونواة ذكاء اصطناعي (Claude)
+            تحلّل السيناريو وتقترح التدخلات. يدعم هواتف الطي (وضع الطاولة والكتاب).
+
+            نزّل `EarthOS-*-release.apk` وثبّته (فعّل «تثبيت من مصادر غير معروفة» عند الطلب).
+
+            ---
+            تطوير **Alcode**

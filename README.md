@@ -16,6 +16,8 @@
   </a>
 </p>
 
+> **جديد:** تطبيق **[مرآة الأرض — EarthOS](earthos/README.md)** لأندرويد (توأم رقمي للأرض بصور NASA ونواة ذكاء اصطناعي، يدعم هواتف الطي). نزّل الـ APK من [الإصدارات](https://github.com/almarar88/mbzuh/releases?q=earthos).
+
 ## ⬇️ التحميل
 
 **[تحميل ملف التثبيت لويندوز (64-بت)](https://github.com/almarar88/mbzuh/releases/latest/download/Dynamo-Setup-1.0.0.exe)**

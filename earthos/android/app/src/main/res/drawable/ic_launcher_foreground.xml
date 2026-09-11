@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- outer orbit ring -->
+    <path android:strokeColor="#5500F0FF" android:strokeWidth="1.5" android:fillColor="#00000000"
+        android:pathData="M54,54 m-36,0 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0" />
+    <!-- planet -->
+    <path android:pathData="M54,54 m-26,0 a26,26 0 1,1 52,0 a26,26 0 1,1 -52,0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="44" android:centerY="44" android:gradientRadius="40">
+                <item android:offset="0.0" android:color="#FF4FF7FF" />
+                <item android:offset="0.45" android:color="#FF0AA8C9" />
+                <item android:offset="1.0" android:color="#FF05263F" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- continents (stylised) -->
+    <path android:fillColor="#7710B981"
+        android:pathData="M40,38 c4,-4 10,-4 13,0 c2,3 -1,6 -4,8 c-3,2 -3,6 -1,9 c2,3 -2,6 -5,5 c-4,-1 -6,-5 -6,-9 c0,-5 0,-9 3,-13 z M60,46 c3,-2 8,-1 10,2 c2,3 0,7 -3,9 c-3,2 -6,0 -7,-3 c-1,-3 -2,-6 0,-8 z M50,64 c3,-1 7,1 7,4 c0,3 -3,6 -6,6 c-3,0 -5,-3 -5,-5 c0,-2 1,-4 4,-5 z" />
+    <!-- graticule -->
+    <path android:strokeColor="#6600F0FF" android:strokeWidth="0.8" android:fillColor="#00000000"
+        android:pathData="M28,54 L80,54 M54,28 L54,80 M54,28 a12,26 0 0,0 0,52 M54,28 a12,26 0 0,1 0,52 M31,42 L77,42 M31,66 L77,66" />
+    <!-- highlight -->
+    <path android:strokeColor="#9900F0FF" android:strokeWidth="2" android:fillColor="#00000000"
+        android:pathData="M54,54 m-28,0 a28,28 0 1,1 56,0 a28,28 0 1,1 -56,0" />
+</vector>

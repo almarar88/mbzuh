@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#0a0f1d" />
+<meta name="color-scheme" content="dark" />
+<title>EarthOS // Planetary Twin Engine</title>
+<link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+<div id="viewport"></div>
+<div id="vignette"></div>
+
+<!-- ───────── Boot overlay ───────── -->
+<div id="boot">
+  <div class="boot-core"><div class="boot-ring"></div><div class="boot-ring r2"></div><div class="boot-planet"></div></div>
+  <div class="boot-title">EarthOS <span>//</span> Planetary Twin Engine</div>
+  <div class="boot-sub mono" id="boot-status">Initialising planetary twin…</div>
+  <div class="boot-bar"><i id="boot-bar"></i></div>
+</div>
+
+<!-- ───────── Header ───────── -->
+<header id="header">
+  <div id="brand">
+    <div class="logo"></div>
+    <div>
+      <h1>EarthOS <span>//</span> Planetary Twin Engine</h1>
+      <small>Digital twin · predictive sandbox · AI core</small>
+    </div>
+  </div>
+  <div id="status">
+    <span class="badge"><i class="cyan" id="nodes-dot"></i>Live Quantum Nodes: <b id="nodes">128/128</b></span>
+    <span class="badge"><i></i>Telemetry Stream: Active</span>
+    <span class="badge"><i class="amber"></i>Simulation Mode: Sandbox</span>
+    <span class="badge" id="ai-badge"><i class="off" id="ai-dot"></i>AI Core: <b id="ai-state">Offline</b></span>
+    <button class="badge btn-badge" id="open-settings" title="Settings">⚙ Settings</button>
+  </div>
+</header>
+
+<!-- ───────── Layer toggles ───────── -->
+<div id="layers" class="glass">
+  <button class="chip on" data-layer="currents"><i></i>Ocean Currents</button>
+  <button class="chip" data-layer="climate"><i></i>Global Climate</button>
+  <button class="chip on" data-layer="supply"><i></i>Supply Chains</button>
+  <button class="chip" data-layer="carbon"><i></i>Carbon Density</button>
+  <button class="chip on" data-layer="clouds"><i></i>Clouds</button>
+  <button class="chip on" data-layer="realsun"><i></i>Real Sun</button>
+  <button class="chip on" data-layer="hires"><i></i>Hi-Res Zoom</button>
+</div>
+
+<!-- ───────── Left: Console ───────── -->
+<aside id="console" class="side glass">
+  <div class="tabs">
+    <button class="tab on" data-tab="params">Intervention</button>
+    <button class="tab" data-tab="scenarios">Scenarios</button>
+  </div>
+
+  <section class="tabpage on" data-page="params">
+    <h2 class="panel-title">Intervention Parameters</h2>
+
+    <div class="param">
+      <header><b>Global Temp Anomaly</b><output id="o-temp">+1.2°C</output></header>
+      <input type="range" id="s-temp" class="amber" min="0" max="5" step="0.1" value="1.2" />
+      <div class="sub"><span>+0.0°C</span><span>Paris limit +1.5°C</span><span>+5.0°C</span></div>
+    </div>
+    <div class="param">
+      <header><b>Sea Level Rise</b><output id="o-sea">0.0 m</output></header>
+      <input type="range" id="s-sea" min="0" max="10" step="0.1" value="0" />
+      <div class="sub"><span>0 m</span><span>WAIS collapse ≈ +3 m</span><span>10 m</span></div>
+    </div>
+    <div class="param">
+      <header><b>Forest Canopy Coverage</b><output id="o-forest">31%</output></header>
+      <input type="range" id="s-forest" class="emerald" min="0" max="100" step="1" value="31" />
+      <div class="sub"><span>0%</span><span>Ground truth 31%</span><span>100%</span></div>
+    </div>
+    <div class="param">
+      <header><b>Grid Disruption Index</b><output id="o-grid">5%</output></header>
+      <input type="range" id="s-grid" class="red" min="0" max="100" step="1" value="5" />
+      <div class="sub"><span>Stable</span><span>Cascade risk &gt; 60%</span><span>Collapse</span></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="run">▶ Run Macro Simulation</button>
+      <button class="btn ai" id="ai-suggest">✦ AI: Suggest Intervention</button>
+      <button class="btn ghost" id="reset">↺ Reset to Ground Truth</button>
+    </div>
+    <p class="muted note">
+      Sliders set the planetary forcing state. Consequences lag forcing: scrub the timeline to watch them materialise.
+      Flooding is rendered with <span id="exag-note">×30</span> vertical exaggeration so a 10 m rise is visible at planetary scale.
+      Model is a heuristic sandbox, not a climate forecast.
+    </p>
+  </section>
+
+  <section class="tabpage" data-page="scenarios">
+    <h2 class="panel-title">Scenario Presets</h2>
+    <div class="presets" id="presets"></div>
+    <h2 class="panel-title" style="margin-top:14px">Saved Scenarios</h2>
+    <div class="row">
+      <input type="text" id="save-name" placeholder="Scenario name…" class="text" />
+      <button class="btn small" id="save-scn">Save</button>
+    </div>
+    <ul id="saved" class="saved"></ul>
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost small" id="export-scn">Copy as JSON</button>
+      <button class="btn ghost small" id="import-scn">Paste JSON</button>
+    </div>
+  </section>
+</aside>
+
+<!-- ───────── Right: Impact / Intelligence ───────── -->
+<aside id="impact" class="side glass">
+  <div class="tabs">
+    <button class="tab on" data-tab="matrix">Impact Matrix</button>
+    <button class="tab" data-tab="intel">✦ Intelligence</button>
+  </div>
+
+  <section class="tabpage on" data-page="matrix">
+    <h2 class="panel-title">Predictive Impact Matrix</h2>
+    <div class="cards">
+      <div class="card" style="--c: var(--amber)">
+        <label>Projected Displacement</label>
+        <div class="value"><span id="v-disp">0.0</span><small>M people</small></div>
+        <div class="delta" id="d-disp">baseline</div>
+      </div>
+      <div class="card" style="--c: var(--red)">
+        <label>Arable Land Deficit</label>
+        <div class="value"><span id="v-arable">0.0</span><small>%</small></div>
+        <div class="delta" id="d-arable">baseline</div>
+      </div>
+      <div class="card wide" style="--c: var(--emerald)">
+        <svg class="gauge" viewBox="0 0 100 100">
+          <circle class="track" cx="50" cy="50" r="42" fill="none" stroke-width="8" />
+          <circle class="arc" id="gauge-arc" cx="50" cy="50" r="42" fill="none" stroke-width="8" stroke-dasharray="263.9" stroke-dashoffset="0" transform="rotate(-90 50 50)" />
+          <text x="50" y="56" text-anchor="middle" id="v-bio">100</text>
+        </svg>
+        <div class="stability-note">
+          <b>Biosphere Stability Score</b>
+          <span id="bio-note">Systems within Holocene envelope.</span>
+          <div class="mono" style="margin-top:6px; color: var(--cyan)">Materialised: <span id="v-mat">30%</span> · Δ vs today: <span id="v-bio-delta">0</span></div>
+        </div>
+      </div>
+      <div class="card" style="--c: var(--cyan)">
+        <label>Coastal Exposure</label>
+        <div class="value"><span id="v-coast">0</span><small>M in flood zone</small></div>
+        <div class="delta" id="d-coast">baseline</div>
+      </div>
+      <div class="card" style="--c: #c084fc">
+        <label>Trade Lanes Online</label>
+        <div class="value"><span id="v-lanes">100</span><small>%</small></div>
+        <div class="delta" id="d-lanes">22 corridors tracked</div>
+      </div>
+    </div>
+
+    <div class="briefing" id="briefing">
+      <div class="briefing-head">
+        <h2 class="panel-title" style="margin:0">✦ AI Executive Briefing</h2>
+        <button class="btn small ai" id="gen-brief">Generate</button>
+      </div>
+      <div class="briefing-body md" id="brief-body"><span class="muted">Generate an AI briefing of the current scenario at the selected year.</span></div>
+    </div>
+
+    <h2 class="panel-title" style="margin-top:4px;">Critical Events</h2>
+    <ul id="log"></ul>
+  </section>
+
+  <section class="tabpage intel" data-page="intel">
+    <h2 class="panel-title">Planetary Intelligence</h2>
+    <div class="intel-hint muted" id="intel-hint">Ask the twin anything about the current scenario. It sees the live parameters, year, impacts and event log.</div>
+    <div id="chat" class="chat"></div>
+    <div class="quick" id="quick">
+      <button data-q="Summarise the state of the planet at the current year in 5 bullets.">Status</button>
+      <button data-q="Which regions are most exposed under this scenario, and why?">Hotspots</button>
+      <button data-q="What is the single most effective intervention to improve the biosphere score, and what would it cost politically?">Best lever</button>
+      <button data-q="Explain the most recent critical event and its second-order effects.">Last event</button>
+    </div>
+    <form class="chatbox" id="chatform">
+      <textarea id="chat-input" rows="1" placeholder="Ask the planetary twin… (Arabic or English)"></textarea>
+      <button type="submit" class="icon-btn small" id="chat-send" title="Send">➤</button>
+    </form>
+  </section>
+</aside>
+
+<!-- ───────── Inspector (tap on globe) ───────── -->
+<div id="inspector" class="glass" hidden>
+  <div class="insp-head">
+    <div>
+      <div class="insp-title mono" id="insp-coords">LAT 0.00 · LON 0.00</div>
+      <div class="insp-sub muted" id="insp-sub">—</div>
+    </div>
+    <button class="x" id="insp-close" title="Close">✕</button>
+  </div>
+  <div class="insp-grid">
+    <div><label>Elevation</label><b id="insp-elev">—</b></div>
+    <div><label>Surface</label><b id="insp-surface">—</b></div>
+    <div><label>Flood status</label><b id="insp-flood">—</b></div>
+    <div><label>Local anomaly</label><b id="insp-temp">—</b></div>
+    <div><label>Nearest hub</label><b id="insp-hub">—</b></div>
+    <div><label>Night lights</label><b id="insp-lights">—</b></div>
+  </div>
+  <div class="row">
+    <button class="btn small ai" id="insp-ai">✦ AI Regional Assessment</button>
+    <button class="btn small ghost" id="insp-zoom">⌖ Zoom here</button>
+  </div>
+  <div class="md insp-ai-body" id="insp-ai-body" hidden></div>
+</div>
+
+<div id="hud">
+  <span id="hud-coords">LAT 00.00 · LON 00.00</span> · <span id="hud-layer">5 LAYERS</span> · <span id="hud-fps">-- FPS</span> · <span id="hud-src">NASA Blue Marble</span>
+</div>
+
+<!-- ───────── Timeline ───────── -->
+<footer id="timeline" class="glass">
+  <div class="tl-controls">
+    <button class="icon-btn" id="play" title="Play / Pause">▶</button>
+    <div class="speed">
+      <button data-speed="1" class="on">1×</button>
+      <button data-speed="5">5×</button>
+      <button data-speed="10">10×</button>
+    </div>
+  </div>
+  <div class="tl-track">
+    <div class="markers" id="markers"></div>
+    <input type="range" id="s-year" min="0" max="50" step="0.1" value="0" />
+    <div class="tl-labels"><span id="y0">2026</span><span>+10</span><span>+20</span><span>+30</span><span>+40</span><span id="y50">+50 years</span></div>
+  </div>
+  <div class="tl-year">
+    <div class="year" id="v-year">2026</div>
+    <div class="yr-sub" id="v-yearsub">T + 0.0 yr · real-time</div>
+  </div>
+</footer>
+
+<nav id="nav">
+  <button data-target="console"><span class="ic">⚙</span>Console</button>
+  <button data-target="timeline"><span class="ic">◷</span>Timeline</button>
+  <button data-target="impact"><span class="ic">◉</span>Impact</button>
+  <button data-target="impact" data-subtab="intel"><span class="ic">✦</span>AI</button>
+</nav>
+
+<!-- ───────── Settings modal ───────── -->
+<div id="settings" class="modal" hidden>
+  <div class="modal-card glass">
+    <div class="modal-head"><h2 class="panel-title" style="margin:0">Settings</h2><button class="x" id="settings-close">✕</button></div>
+
+    <h3>AI Core (Anthropic Claude)</h3>
+    <label class="field">API key
+      <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" />
+    </label>
+    <div class="row">
+      <label class="field grow">Model
+        <select id="set-model"></select>
+      </label>
+      <label class="field">Effort
+        <select id="set-effort"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="field grow">Response language
+        <select id="set-lang"><option value="auto">Auto (match question)</option><option value="ar">العربية</option><option value="en">English</option></select>
+      </label>
+      <label class="check"><input type="checkbox" id="set-fallbacks" /> Refusal fallbacks</label>
+    </div>
+    <p class="muted small-note">The key is stored only on this device (local storage) and sent directly to api.anthropic.com. Without a key the twin uses a built-in offline analyst.</p>
+    <div class="row"><button class="btn small" id="test-ai">Test connection</button><span class="mono muted" id="test-ai-out"></span></div>
+
+    <h3>Imagery</h3>
+    <label class="field">Hi-res zoom provider
+      <select id="set-provider">
+        <option value="gibs-bm">NASA Blue Marble (500 m, no key)</option>
+        <option value="gibs-viirs">NASA VIIRS true colour — yesterday's live pass (750 m)</option>
+        <option value="google">Google Maps satellite tiles (requires key)</option>
+      </select>
+    </label>
+    <label class="field">Google Maps Platform key (Map Tiles API)
+      <input type="password" id="set-gkey" placeholder="AIza…" autocomplete="off" />
+    </label>
+    <label class="field">Flood exaggeration ×<span id="set-exag-v">30</span>
+      <input type="range" id="set-exag" min="1" max="60" step="1" value="30" />
+    </label>
+    <p class="muted small-note">Base globe: NASA Blue Marble Next Generation (day), NASA Black Marble 2016 (night), GEBCO elevation — bundled offline. Hi-res zoom streams tiles when online.</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn primary small" id="settings-save">Save</button></div>
+  </div>
+</div>
+
+<div id="toast" class="glass"></div>
+
+<script src="lib/three.min.js"></script>
+<script src="js/earth.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
