@@ -47,7 +47,7 @@ class _MizanAppState extends State<MizanApp> {
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsService>();
     return MaterialApp(
-      title: 'ميزان',
+      title: 'Mizan',
       navigatorKey: _navKey,
       debugShowCheckedModeBanner: false,
       locale: settings.locale,

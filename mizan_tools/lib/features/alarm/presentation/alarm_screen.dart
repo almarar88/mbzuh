@@ -12,6 +12,7 @@ import '../../../services/alarm_store.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 
 enum AlarmTab { alarms, timer, stopwatch }
 
@@ -41,8 +42,8 @@ class _AlarmScreenState extends State<AlarmScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    return Scaffold(
-      appBar: AppBar(
+    return GlassScaffold(
+      appBar: GlassAppBar(
         title: Text(s.toolAlarm),
         bottom: TabBar(
           controller: _tabs,
@@ -146,10 +147,11 @@ class _AlarmsTabState extends State<_AlarmsTab> {
     final needsPermission = _notifGranted == false || _exactGranted == false;
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _add,
-        icon: const Icon(Icons.add_alarm_rounded),
-        label: Text(s.addAlarm),
+        tooltip: s.addAlarm,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add_rounded, size: 30),
       ),
       body: ContentConstraint(
         child: ListView(
@@ -215,20 +217,36 @@ class _AlarmsTabState extends State<_AlarmsTab> {
                   },
                   child: CustomCard(
                     onTap: () => _editSheet(a),
-                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+                    padding: const EdgeInsets.fromLTRB(18, 10, 8, 12),
                     child: Row(
                       children: [
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                d(Fmt.timeOfDay(a.time, ar: ar)),
-                                style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w700,
-                                  color: a.enabled ? scheme.onSurface : scheme.outline,
-                                  height: 1.1,
+                              Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      d('${a.hour % 12 == 0 ? 12 : a.hour % 12}:${Fmt.two(a.minute)}'),
+                                      style: TextStyle(
+                                        fontSize: 46,
+                                        fontWeight: FontWeight.w300,
+                                        letterSpacing: -1,
+                                        color: a.enabled ? scheme.onSurface : scheme.outline,
+                                        height: 1.1,
+                                        fontFeatures: const [FontFeature.tabularFigures()],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      a.hour < 12 ? (ar ? 'ص' : 'AM') : (ar ? 'م' : 'PM'),
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: a.enabled ? scheme.onSurface : scheme.outline),
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -503,17 +521,17 @@ class _TimerTabState extends State<_TimerTab> {
             children: [
               Center(
                 child: SizedBox(
-                  width: 240,
-                  height: 240,
+                  width: 280,
+                  height: 280,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
                       CircularProgressIndicator(
                         value: progress.clamp(0, 1),
-                        strokeWidth: 12,
+                        strokeWidth: 9,
                         strokeCap: StrokeCap.round,
                         backgroundColor: scheme.surfaceContainerHighest,
-                        color: _ctrl.finished ? AppColors.stopwatch : AppColors.timer,
+                        color: _ctrl.finished ? AppColors.green : scheme.primary,
                       ),
                       Center(
                         child: Column(
@@ -521,10 +539,22 @@ class _TimerTabState extends State<_TimerTab> {
                           children: [
                             Text(
                               d(Fmt.duration(_ctrl.remaining, showHours: _ctrl.total.inHours > 0)),
-                              style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+                              style: const TextStyle(fontSize: 60, fontWeight: FontWeight.w200, letterSpacing: -1, fontFeatures: [FontFeature.tabularFigures()]),
                             ),
                             if (_ctrl.finished)
-                              Text(s.timerFinished, style: TextStyle(color: AppColors.stopwatch, fontWeight: FontWeight.w700)),
+                              Text(s.timerFinished, style: const TextStyle(color: AppColors.green, fontWeight: FontWeight.w700))
+                            else if (_ctrl.running || _ctrl.remaining < _ctrl.total)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.notifications_none_rounded, size: 16, color: scheme.onSurfaceVariant),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    d(Fmt.time(DateTime.now().add(_ctrl.remaining), ar: ar)),
+                                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 15),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
@@ -551,32 +581,26 @@ class _TimerTabState extends State<_TimerTab> {
               ],
               const SizedBox(height: 24),
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _ctrl.reset,
-                      icon: const Icon(Icons.replay_rounded),
-                      label: Text(s.reset),
-                    ),
+                  RoundActionButton(
+                    label: s.cancel,
+                    color: scheme.onSurfaceVariant,
+                    onTap: (_ctrl.running || _ctrl.remaining < _ctrl.total || _ctrl.finished) ? _ctrl.reset : null,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: _ctrl.running ? AppColors.alarm : AppColors.timer),
-                      onPressed: _ctrl.finished
-                          ? _ctrl.reset
-                          : () async {
-                              if (_ctrl.running) {
-                                await _ctrl.pause();
-                              } else {
-                                await NotificationService.instance.requestPermissions();
-                                await _ctrl.start(ar: ar, title: s.timerFinished, body: s.timerFinishedBody);
-                              }
-                            },
-                      icon: Icon(_ctrl.running ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                      label: Text(_ctrl.finished ? s.done : (_ctrl.running ? s.pause : (_ctrl.remaining < _ctrl.total ? s.resume : s.start))),
-                    ),
+                  RoundActionButton(
+                    label: _ctrl.finished ? s.done : (_ctrl.running ? s.pause : (_ctrl.remaining < _ctrl.total ? s.resume : s.start)),
+                    color: _ctrl.running ? scheme.primary : AppColors.green,
+                    onTap: _ctrl.finished
+                        ? _ctrl.reset
+                        : () async {
+                            if (_ctrl.running) {
+                              await _ctrl.pause();
+                            } else {
+                              await NotificationService.instance.requestPermissions();
+                              await _ctrl.start(ar: ar, title: s.timerFinished, body: s.timerFinishedBody);
+                            }
+                          },
                   ),
                 ],
               ),
@@ -711,13 +735,17 @@ class _StopwatchTab extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
                 child: Directionality(
                   textDirection: TextDirection.ltr,
-                  child: Text(
-                    d(_fmt(ctrl.elapsed)),
-                    style: TextStyle(
-                      fontSize: 58,
-                      fontWeight: FontWeight.w700,
-                      color: ctrl.running ? AppColors.stopwatch : scheme.onSurface,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      d(_fmt(ctrl.elapsed)),
+                      style: TextStyle(
+                        fontSize: 76,
+                        fontWeight: FontWeight.w200,
+                        letterSpacing: -1.5,
+                        color: scheme.onSurface,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                 ),
@@ -725,23 +753,17 @@ class _StopwatchTab extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: ctrl.hasStarted ? (ctrl.running ? ctrl.lap : ctrl.reset) : null,
-                        icon: Icon(ctrl.running ? Icons.flag_rounded : Icons.replay_rounded),
-                        label: Text(ctrl.running ? s.lap : s.reset),
-                      ),
+                    RoundActionButton(
+                      label: ctrl.running ? s.lap : s.reset,
+                      color: scheme.onSurfaceVariant,
+                      onTap: ctrl.hasStarted ? (ctrl.running ? ctrl.lap : ctrl.reset) : null,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(backgroundColor: ctrl.running ? AppColors.alarm : AppColors.stopwatch),
-                        onPressed: ctrl.running ? ctrl.pause : ctrl.start,
-                        icon: Icon(ctrl.running ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                        label: Text(ctrl.running ? s.pause : (ctrl.hasStarted ? s.resume : s.start)),
-                      ),
+                    RoundActionButton(
+                      label: ctrl.running ? s.stop : (ctrl.hasStarted ? s.resume : s.start),
+                      color: ctrl.running ? AppColors.red : AppColors.green,
+                      onTap: ctrl.running ? ctrl.pause : ctrl.start,
                     ),
                   ],
                 ),
@@ -753,34 +775,66 @@ class _StopwatchTab extends StatelessWidget {
                   child: SectionHeader(s.laps),
                 ),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  itemCount: ctrl.laps.length,
-                  itemBuilder: (context, i) {
-                    final idx = ctrl.laps.length - i;
-                    final lapTime = ctrl.laps[i];
-                    final prev = i + 1 < ctrl.laps.length ? ctrl.laps[i + 1] : Duration.zero;
-                    final split = lapTime - prev;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: CustomCard(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        child: Row(
+                child: Builder(builder: (context) {
+                  // Per-lap splits (newest first), used to colour fastest/slowest.
+                  final splits = <Duration>[
+                    for (var i = 0; i < ctrl.laps.length; i++)
+                      ctrl.laps[i] - (i + 1 < ctrl.laps.length ? ctrl.laps[i + 1] : Duration.zero),
+                  ];
+                  Duration? fastest, slowest;
+                  if (splits.length >= 2) {
+                    fastest = splits.reduce((a, b) => a < b ? a : b);
+                    slowest = splits.reduce((a, b) => a > b ? a : b);
+                  }
+                  if (splits.isEmpty) return const SizedBox.shrink();
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    children: [
+                      CustomCard(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: Column(
                           children: [
-                            CircleAvatar(
-                              radius: 14,
-                              backgroundColor: AppColors.stopwatch.withValues(alpha: 0.15),
-                              child: Text(d('$idx'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.stopwatch)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(child: Text(d(_fmt(split)), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, fontFeatures: [FontFeature.tabularFigures()]))),
-                            Text(d(_fmt(lapTime)), style: TextStyle(color: scheme.onSurfaceVariant, fontFeatures: const [FontFeature.tabularFigures()])),
+                            for (var i = 0; i < splits.length; i++) ...[
+                              if (i > 0) const Divider(),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${s.lap} ${d('${splits.length - i}')}',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: splits[i] == fastest
+                                              ? AppColors.green
+                                              : splits[i] == slowest
+                                                  ? AppColors.red
+                                                  : scheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      d(_fmt(splits[i])),
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontFeatures: const [FontFeature.tabularFigures()],
+                                        color: splits[i] == fastest
+                                            ? AppColors.green
+                                            : splits[i] == slowest
+                                                ? AppColors.red
+                                                : scheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ],
+                  );
+                }),
               ),
             ],
           ),

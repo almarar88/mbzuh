@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/l10n/strings.dart';
 import '../../core/utils/responsive.dart';
+import '../../shared/widgets/glass.dart';
 import '../finance_hub/presentation/finance_hub_screen.dart';
 import '../home/presentation/home_screen.dart';
 import '../settings/presentation/settings_screen.dart';
 import '../time_hub/presentation/time_hub_screen.dart';
 
-/// Root navigation. Bottom bar on phones / folded state, side rail when the
-/// window is medium or expanded (unfolded foldables, tablets, landscape).
+/// Root navigation. Floating glass tab bar on phones / folded state, side
+/// rail when the window is medium or expanded (unfolded foldables, tablets).
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -40,49 +41,40 @@ class _MainShellState extends State<MainShell> {
     ];
 
     if (size == WindowSize.compact) {
-      return Scaffold(
+      return GlassScaffold(
+        extendBody: true,
         body: body,
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: GlassNavBar(
           selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: [
-            for (final it in items)
-              NavigationDestination(icon: Icon(it.$1), selectedIcon: Icon(it.$2), label: it.$3),
-          ],
+          onSelected: (i) => setState(() => _index = i),
+          items: items,
         ),
       );
     }
 
-    return Scaffold(
+    return GlassScaffold(
       body: Row(
         children: [
-          NavigationRail(
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
-            extended: size == WindowSize.expanded && MediaQuery.sizeOf(context).width >= 1100,
-            minExtendedWidth: 190,
-            leading: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Column(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)]),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.balance_rounded, color: Colors.white),
-                  ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 0, 10),
+            child: GlassPanel(
+              radius: 26,
+              child: NavigationRail(
+                selectedIndex: _index,
+                onDestinationSelected: (i) => setState(() => _index = i),
+                extended: size == WindowSize.expanded && MediaQuery.sizeOf(context).width >= 1100,
+                minExtendedWidth: 190,
+                leading: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Image.asset('assets/branding/logo.png', width: 44, height: 44),
+                ),
+                destinations: [
+                  for (final it in items)
+                    NavigationRailDestination(icon: Icon(it.$1), selectedIcon: Icon(it.$2), label: Text(it.$3)),
                 ],
               ),
             ),
-            destinations: [
-              for (final it in items)
-                NavigationRailDestination(icon: Icon(it.$1), selectedIcon: Icon(it.$2), label: Text(it.$3)),
-            ],
           ),
-          const VerticalDivider(width: 1),
           Expanded(child: body),
         ],
       ),

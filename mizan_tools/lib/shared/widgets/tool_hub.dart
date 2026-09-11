@@ -6,6 +6,7 @@ import '../../core/tools_registry.dart';
 import '../../core/utils/responsive.dart';
 import '../../services/settings_service.dart';
 import 'tool_grid_card.dart';
+import 'glass.dart';
 
 /// A category hub: a grid of tools on phones, a list + detail pane on
 /// unfolded foldables and tablets (respecting the hinge).
@@ -30,13 +31,13 @@ class _ToolHubScreenState extends State<ToolHubScreen> {
 
     final selected = _selectedId == null ? null : ToolsRegistry.byId(_selectedId!);
 
-    final grid = Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+    final grid = GlassScaffold(
+      appBar: GlassAppBar(title: Text(widget.title)),
       body: LayoutBuilder(
         builder: (context, c) {
           final cols = compact ? Responsive.gridColumns(c.maxWidth) : (c.maxWidth >= 520 ? 2 : 1);
           return GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 24 + MediaQuery.paddingOf(context).bottom),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: cols,
               mainAxisSpacing: 12,
@@ -77,7 +78,7 @@ class _ToolHubScreenState extends State<ToolHubScreen> {
     if (compact) return grid;
 
     final detail = selected == null
-        ? Scaffold(
+        ? GlassScaffold(
             body: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

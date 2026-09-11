@@ -3,11 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:math_expressions/math_expressions.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/constants/colors.dart';
 import '../../../core/l10n/strings.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/settings_service.dart';
+import '../../../shared/widgets/glass.dart';
 
 /// Expression calculator: shows the running expression, a live preview of the
 /// result, and keeps a persisted history.
@@ -136,7 +137,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       children: [
         Expanded(
           child: Container(
-            alignment: AlignmentDirectional.bottomEnd,
+            alignment: Alignment.bottomRight,
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
             child: Directionality(
               textDirection: TextDirection.ltr,
@@ -150,10 +151,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     child: Text(
                       _expr.isEmpty ? '0' : d(_expr),
                       style: TextStyle(
-                        fontSize: _expr.length > 14 ? 30 : 42,
-                        fontWeight: FontWeight.w600,
+                        fontSize: _expr.length > 14 ? 34 : 56,
+                        fontWeight: FontWeight.w300,
                         color: scheme.onSurface,
                         height: 1.1,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),
@@ -163,7 +165,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                     opacity: _preview == null ? 0 : 1,
                     child: Text(
                       _preview == null ? '' : '= ${d(_preview!)}',
-                      style: TextStyle(fontSize: 20, color: scheme.onSurfaceVariant),
+                      style: TextStyle(fontSize: 22, color: scheme.primary, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
@@ -171,13 +173,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             ),
           ),
         ),
-        const Divider(),
         _Keypad(onKey: _tap, onClear: _clear, onBackspace: _backspace, onEquals: _equals, digits: d),
       ],
     );
 
-    return Scaffold(
-      appBar: AppBar(
+    return GlassScaffold(
+      appBar: GlassAppBar(
         title: Text(s.toolCalculator),
         actions: [
           if (Responsive.isCompact(context))
@@ -239,37 +240,42 @@ class _Keypad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = <List<_Key>>[
-      [_Key('C', kind: _KeyKind.action), _Key('( )', kind: _KeyKind.op), _Key('%', kind: _KeyKind.op), _Key('÷', kind: _KeyKind.op)],
+      [_Key('C', kind: _KeyKind.function), _Key('( )', kind: _KeyKind.function), _Key('%', kind: _KeyKind.function), _Key('÷', kind: _KeyKind.op)],
       [_Key('7'), _Key('8'), _Key('9'), _Key('×', kind: _KeyKind.op)],
       [_Key('4'), _Key('5'), _Key('6'), _Key('−', kind: _KeyKind.op)],
       [_Key('1'), _Key('2'), _Key('3'), _Key('+', kind: _KeyKind.op)],
-      [_Key('⌫', kind: _KeyKind.action), _Key('0'), _Key('.'), _Key('=', kind: _KeyKind.accent)],
+      [_Key('⌫', kind: _KeyKind.function), _Key('0'), _Key('.'), _Key('=', kind: _KeyKind.op)],
     ];
+    const gap = 12.0;
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
         child: LayoutBuilder(
           builder: (context, c) {
-            final keyH = ((c.maxWidth - 3 * 8) / 4 * 0.8).clamp(52.0, 76.0);
+            final byWidth = (c.maxWidth - 3 * gap) / 4;
+            final maxH = MediaQuery.sizeOf(context).height * 0.58;
+            final byHeight = (maxH - 4 * gap) / 5;
+            final key = byWidth.clamp(44.0, 88.0).clamp(0.0, byHeight < 44 ? 44.0 : byHeight);
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final row in rows)
+                for (var r = 0; r < rows.length; r++)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
+                    padding: EdgeInsets.only(bottom: r == rows.length - 1 ? 0 : gap),
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        for (var i = 0; i < row.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          Expanded(
-                            child: SizedBox(
-                              height: keyH,
+                        for (final k in rows[r])
+                          SizedBox(
+                            width: byWidth,
+                            child: Center(
                               child: _KeyButton(
-                                k: row[i],
-                                label: RegExp(r'^\d$').hasMatch(row[i].label) ? digits(row[i].label) : row[i].label,
+                                k: k,
+                                size: key,
+                                label: RegExp(r'^\d$').hasMatch(k.label) ? digits(k.label) : k.label,
                                 onTap: () {
-                                  switch (row[i].label) {
+                                  switch (k.label) {
                                     case 'C':
                                       onClear();
                                     case '⌫':
@@ -277,13 +283,12 @@ class _Keypad extends StatelessWidget {
                                     case '=':
                                       onEquals();
                                     default:
-                                      onKey(row[i].label);
+                                      onKey(k.label);
                                   }
                                 },
                               ),
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ),
@@ -296,7 +301,7 @@ class _Keypad extends StatelessWidget {
   }
 }
 
-enum _KeyKind { digit, op, action, accent }
+enum _KeyKind { digit, op, function }
 
 class _Key {
   const _Key(this.label, {this.kind = _KeyKind.digit});
@@ -304,38 +309,46 @@ class _Key {
   final _KeyKind kind;
 }
 
+/// iOS-style circular calculator key.
 class _KeyButton extends StatelessWidget {
-  const _KeyButton({required this.k, required this.label, required this.onTap});
+  const _KeyButton({required this.k, required this.label, required this.onTap, required this.size});
   final _Key k;
   final String label;
   final VoidCallback onTap;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final g = GlassTheme.of(context);
     final (bg, fg) = switch (k.kind) {
-      _KeyKind.digit => (Theme.of(context).cardColor, scheme.onSurface),
-      _KeyKind.op => (AppColors.calculator.withValues(alpha: isDark ? 0.22 : 0.12), AppColors.calculator),
-      _KeyKind.action => (scheme.errorContainer.withValues(alpha: isDark ? 0.5 : 0.7), scheme.onErrorContainer),
-      _KeyKind.accent => (scheme.primary, scheme.onPrimary),
+      _KeyKind.digit => (g.keyDigit, Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
+      _KeyKind.function => (g.keyFunction, g.onKeyFunction),
+      _KeyKind.op => (scheme.primary, Colors.white),
     };
-    return Material(
-      color: bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: k.kind == _KeyKind.digit
-            ? BorderSide(color: scheme.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.6))
-            : BorderSide.none,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: k.label == '⌫' ? () => Feedback.forLongPress(context) : null,
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(fontSize: k.kind == _KeyKind.digit ? 24 : 22, fontWeight: FontWeight.w700, color: fg),
+    final isIcon = k.label == '⌫';
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Material(
+        color: bg,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Center(
+            child: isIcon
+                ? Icon(Icons.backspace_outlined, color: fg, size: size * 0.34)
+                : Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: k.kind == _KeyKind.digit ? size * 0.40 : size * 0.44,
+                      fontWeight: k.kind == _KeyKind.digit ? FontWeight.w500 : FontWeight.w700,
+                      color: fg,
+                      height: 1,
+                    ),
+                  ),
           ),
         ),
       ),

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Flat, rounded surface used across the app.
+import '../../core/theme/app_theme.dart';
+
+/// Frosted-glass surface used across the app: translucent fill, hairline
+/// border and a soft top highlight.
 class CustomCard extends StatelessWidget {
   const CustomCard({
     super.key,
@@ -10,6 +13,7 @@ class CustomCard extends StatelessWidget {
     this.onLongPress,
     this.color,
     this.borderColor,
+    this.radius = 22,
   });
 
   final Widget child;
@@ -18,24 +22,31 @@ class CustomCard extends StatelessWidget {
   final VoidCallback? onLongPress;
   final Color? color;
   final Color? borderColor;
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(18),
-      side: BorderSide(
-        color: borderColor ?? theme.colorScheme.outlineVariant.withValues(alpha: theme.brightness == Brightness.dark ? 0.35 : 0.6),
+    final g = GlassTheme.of(context);
+    final fill = color ?? g.fill;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: borderColor ?? g.border),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color.alphaBlend(g.highlight.withValues(alpha: 0.10), fill), fill],
+        ),
       ),
-    );
-    return Material(
-      color: color ?? theme.cardColor,
-      shape: shape,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(padding: padding, child: child),
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
   }
@@ -48,12 +59,16 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 10),
+      padding: const EdgeInsets.only(top: 10, bottom: 10, left: 4, right: 4),
       child: Row(
         children: [
           Expanded(
-            child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            child: Text(
+              title,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.4, color: scheme.onSurfaceVariant),
+            ),
           ),
           ?action,
         ],
@@ -83,10 +98,11 @@ class StatBox extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: small ? 20 : 28,
+                fontSize: small ? 22 : 32,
                 fontWeight: FontWeight.w700,
                 color: color ?? scheme.primary,
-                height: 1.2,
+                height: 1.15,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
@@ -110,7 +126,7 @@ class InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
         children: [
           if (icon != null) ...[

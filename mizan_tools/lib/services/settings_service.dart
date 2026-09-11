@@ -18,7 +18,7 @@ class SettingsService extends ChangeNotifier {
   static const _kFavorites = 'favorites';
   static const _kCalcHistory = 'calc_history';
 
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.dark;
   Locale _locale = const Locale('ar', 'AE');
   bool _easternDigits = false;
   String _defaultCurrency = 'AED';
@@ -38,7 +38,7 @@ class SettingsService extends ChangeNotifier {
   List<String> get calcHistory => List.unmodifiable(_calcHistory);
 
   void _load() {
-    _themeMode = ThemeMode.values[_prefs.getInt(_kTheme) ?? ThemeMode.system.index];
+    _themeMode = ThemeMode.values[_prefs.getInt(_kTheme) ?? ThemeMode.dark.index];
     final lang = _prefs.getString(_kLocale) ?? 'ar';
     _locale = lang == 'en' ? const Locale('en', 'US') : const Locale('ar', 'AE');
     _easternDigits = _prefs.getBool(_kDigits) ?? false;

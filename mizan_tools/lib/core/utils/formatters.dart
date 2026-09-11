@@ -11,8 +11,24 @@ class Fmt {
 
   static const _eastern = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
 
+  /// Maps Arabic-Indic digits (٠..٩) back to ASCII so every formatter starts
+  /// from the same baseline regardless of the intl locale used.
+  static String western(String input) {
+    final sb = StringBuffer();
+    for (final ch in input.runes) {
+      if (ch >= 0x660 && ch <= 0x669) {
+        sb.writeCharCode(0x30 + (ch - 0x660));
+      } else if (ch >= 0x6F0 && ch <= 0x6F9) {
+        sb.writeCharCode(0x30 + (ch - 0x6F0));
+      } else {
+        sb.writeCharCode(ch);
+      }
+    }
+    return sb.toString();
+  }
+
   static String digits(String input, {required bool eastern}) {
-    if (!eastern) return input;
+    if (!eastern) return western(input);
     final sb = StringBuffer();
     for (final ch in input.runes) {
       if (ch >= 0x30 && ch <= 0x39) {
@@ -67,7 +83,7 @@ class Fmt {
   }
 
   static String gregorianLong(DateTime d, {required bool ar}) =>
-      DateFormat('EEEE، d MMMM yyyy', ar ? 'ar' : 'en').format(d);
+      western(DateFormat('EEEE، d MMMM yyyy', ar ? 'ar' : 'en').format(d));
 
   static String gregorianShort(DateTime d) => DateFormat('yyyy/MM/dd').format(d);
 

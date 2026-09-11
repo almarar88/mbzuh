@@ -8,6 +8,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 
 enum _Mode { gregToHijri, hijriToGreg }
 
@@ -73,8 +74,8 @@ class _HijriConverterScreenState extends State<HijriConverterScreen> {
     }
     upcoming.sort((a, b) => a.$3.compareTo(b.$3));
 
-    return Scaffold(
-      appBar: AppBar(title: Text(s.hijriTitle)),
+    return GlassScaffold(
+      appBar: GlassAppBar(title: Text(s.hijriTitle)),
       body: ContentConstraint(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

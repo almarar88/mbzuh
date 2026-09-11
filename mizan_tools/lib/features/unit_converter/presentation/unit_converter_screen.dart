@@ -8,6 +8,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 
 class _Unit {
   const _Unit(this.id, this.ar, this.en, this.factor);
@@ -143,8 +144,8 @@ class _UnitConverterScreenState extends State<UnitConverterScreen> {
     final result = _convert(cat, from, to, v);
     String name(_Unit u) => ar ? u.ar : u.en;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(s.unitsTitle)),
+    return GlassScaffold(
+      appBar: GlassAppBar(title: Text(s.unitsTitle)),
       body: ContentConstraint(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

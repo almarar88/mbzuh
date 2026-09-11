@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/constants/colors.dart';
 import '../../../core/l10n/strings.dart';
 import '../../../core/tools_registry.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 import '../../../shared/widgets/tool_grid_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       final n = DateTime.now();
-      if (n.minute != _now.minute || n.hour != _now.hour) setState(() => _now = n);
+      if (n.second != _now.second) setState(() => _now = n);
     });
   }
 
@@ -43,19 +43,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final s = S.of(context);
     final settings = context.watch<SettingsService>();
     final favorites = settings.favorites.map(ToolsRegistry.byId).whereType<ToolDef>().toList();
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    return Scaffold(
-      appBar: AppBar(
+    return GlassScaffold(
+      appBar: GlassAppBar(
         title: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: AppColors.headerGradient),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.balance_rounded, color: Colors.white, size: 20),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Image.asset('assets/branding/logo.png', width: 30, height: 30),
             ),
             const SizedBox(width: 10),
             Text(s.appName),
@@ -67,13 +63,13 @@ class _HomeScreenState extends State<HomeScreen> {
           final cols = Responsive.gridColumns(constraints.maxWidth);
           final slivers = <Widget>[
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              sliver: SliverToBoxAdapter(child: _HeaderCard(now: _now)),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              sliver: SliverToBoxAdapter(child: _ClockCard(now: _now)),
             ),
             if (favorites.isNotEmpty) ...[
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverToBoxAdapter(child: SectionHeader(s.favorites)),
+                sliver: SliverToBoxAdapter(child: SectionHeader(s.favorites.toUpperCase())),
               ),
               _grid(favorites, cols, s, settings),
             ] else
@@ -83,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: CustomCard(
                     child: Row(
                       children: [
-                        Icon(Icons.star_outline_rounded, color: Colors.amber.shade600),
+                        Icon(Icons.star_outline_rounded, color: Theme.of(context).colorScheme.primary),
                         const SizedBox(width: 10),
                         Expanded(child: Text(s.noFavoritesHint)),
                       ],
@@ -94,11 +90,11 @@ class _HomeScreenState extends State<HomeScreen> {
             for (final cat in ToolCategory.values) ...[
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                sliver: SliverToBoxAdapter(child: SectionHeader(ToolsRegistry.categoryTitle(cat, s))),
+                sliver: SliverToBoxAdapter(child: SectionHeader(ToolsRegistry.categoryTitle(cat, s).toUpperCase())),
               ),
               _grid(ToolsRegistry.byCategory(cat), cols, s, settings),
             ],
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            SliverToBoxAdapter(child: SizedBox(height: 24 + bottomInset)),
           ];
           return CustomScrollView(slivers: slivers);
         },
@@ -142,16 +138,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.now});
+/// iOS Clock-style hero: huge light-weight time, then both calendars.
+class _ClockCard extends StatelessWidget {
+  const _ClockCard({required this.now});
   final DateTime now;
 
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
     final settings = context.watch<SettingsService>();
+    final scheme = Theme.of(context).colorScheme;
     final ar = settings.isArabic;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    String d(String v) => Fmt.digits(v, eastern: settings.easternDigits);
 
     final greeting = switch (now.hour) {
       >= 5 && < 12 => s.goodMorning,
@@ -159,46 +157,52 @@ class _HeaderCard extends StatelessWidget {
       >= 17 && < 22 => s.goodEvening,
       _ => s.goodNight,
     };
-    final time = Fmt.digits(Fmt.time(now, ar: ar), eastern: settings.easternDigits);
-    final greg = Fmt.digits(Fmt.gregorianLong(now, ar: ar), eastern: settings.easternDigits);
-    final hijri = Fmt.digits(
-      Fmt.hijriLong(now, ar: ar, adjustDays: settings.hijriAdjust),
-      eastern: settings.easternDigits,
-    );
+    final h = now.hour % 12 == 0 ? 12 : now.hour % 12;
+    final time = d('$h:${Fmt.two(now.minute)}');
+    final seconds = d(Fmt.two(now.second));
+    final period = now.hour < 12 ? (ar ? 'ص' : 'AM') : (ar ? 'م' : 'PM');
+    final greg = d(Fmt.gregorianLong(now, ar: ar));
+    final hijri = d(Fmt.hijriLong(now, ar: ar, adjustDays: settings.hijriAdjust));
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark ? AppColors.headerGradientDark : AppColors.headerGradient,
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(color: AppColors.seedLight.withValues(alpha: isDark ? 0.15 : 0.3), blurRadius: 24, offset: const Offset(0, 10)),
-        ],
-      ),
-      child: Row(
+    return CustomCard(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      radius: 28,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Text(greeting, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
               children: [
-                Text(greeting, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                const SizedBox(height: 4),
                 Text(
                   time,
-                  style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w700, height: 1.1),
+                  style: TextStyle(
+                    fontSize: 64,
+                    fontWeight: FontWeight.w400,
+                    height: 1.15,
+                    letterSpacing: -1.5,
+                    color: scheme.onSurface,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                _DateLine(icon: Icons.calendar_today_rounded, label: s.gregorianLabel, text: greg),
-                const SizedBox(height: 6),
-                _DateLine(icon: Icons.nightlight_round, label: s.hijriLabel, text: hijri),
+                const SizedBox(width: 8),
+                Text(
+                  seconds,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w400, color: scheme.primary, fontFeatures: const [FontFeature.tabularFigures()]),
+                ),
+                const SizedBox(width: 6),
+                Text(period, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          _DateLine(icon: Icons.calendar_today_rounded, label: s.gregorianLabel, text: greg),
+          const SizedBox(height: 8),
+          _DateLine(icon: Icons.nightlight_round, label: s.hijriLabel, text: hijri),
         ],
       ),
     );
@@ -213,14 +217,15 @@ class _DateLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Icon(icon, size: 15, color: Colors.white70),
+        Icon(icon, size: 15, color: scheme.primary),
         const SizedBox(width: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(8)),
-          child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+          decoration: BoxDecoration(color: scheme.primary.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(8)),
+          child: Text(label, style: TextStyle(color: scheme.primary, fontSize: 11, fontWeight: FontWeight.w700)),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -228,7 +233,7 @@ class _DateLine extends StatelessWidget {
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+            style: TextStyle(color: scheme.onSurface, fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ),
       ],

@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -21,8 +19,11 @@ class NotificationService {
   /// Notifies listeners (the UI) when a notification is tapped.
   final ValueNotifier<String?> lastPayload = ValueNotifier<String?>(null);
 
+  /// Notifications are Android-only; on other targets every call is a no-op.
+  bool get _supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
   Future<void> init() async {
-    if (_ready) return;
+    if (_ready || !_supported) return;
     tzdata.initializeTimeZones();
     try {
       final info = await FlutterTimezone.getLocalTimezone();
@@ -44,7 +45,7 @@ class NotificationService {
       _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
   Future<bool> requestPermissions() async {
-    if (!Platform.isAndroid) return true;
+    if (!_supported) return true;
     final android = _android;
     if (android == null) return false;
     final notif = await android.requestNotificationsPermission() ?? false;
@@ -56,12 +57,12 @@ class NotificationService {
   }
 
   Future<bool> notificationsGranted() async {
-    if (!Platform.isAndroid) return true;
+    if (!_supported) return true;
     return await _android?.areNotificationsEnabled() ?? false;
   }
 
   Future<bool> exactAlarmsGranted() async {
-    if (!Platform.isAndroid) return true;
+    if (!_supported) return true;
     return await _android?.canScheduleExactNotifications() ?? false;
   }
 
@@ -112,6 +113,7 @@ class NotificationService {
     required String body,
     required bool ar,
   }) async {
+    if (!_supported) return;
     await cancelAlarm(alarmId);
     final details = _alarmDetails(ar: ar);
     if (weekdays.isEmpty) {
@@ -141,12 +143,14 @@ class NotificationService {
   }
 
   Future<void> cancelAlarm(int alarmId) async {
+    if (!_supported) return;
     for (var i = 0; i <= 7; i++) {
       await _plugin.cancel(id: alarmId * 10 + i);
     }
   }
 
   Future<void> scheduleTimer(Duration d, {required bool ar, required String title, required String body}) async {
+    if (!_supported) return;
     await cancelTimer();
     final when = tz.TZDateTime.now(tz.local).add(d);
     await _plugin.zonedSchedule(
@@ -160,14 +164,20 @@ class NotificationService {
     );
   }
 
-  Future<void> cancelTimer() => _plugin.cancel(id: timerNotificationId);
+  Future<void> cancelTimer() async {
+    if (!_supported) return;
+    await _plugin.cancel(id: timerNotificationId);
+  }
 
-  Future<void> showTest({required bool ar}) => _plugin.show(
+  Future<void> showTest({required bool ar}) async {
+    if (!_supported) return;
+    await _plugin.show(
         id: 1,
         title: ar ? 'ميزان' : 'Mizan',
         body: ar ? 'الإشعارات تعمل بشكل صحيح ✅' : 'Notifications are working ✅',
         notificationDetails: _timerDetails(ar: ar),
       );
+  }
 
   tz.TZDateTime _nextInstance(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);

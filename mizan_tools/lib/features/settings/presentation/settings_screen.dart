@@ -9,6 +9,7 @@ import '../../../services/currency_service.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -58,11 +59,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     final ar = settings.isArabic;
     String d(String v) => Fmt.digits(v, eastern: settings.easternDigits);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(s.settingsTitle)),
+    return GlassScaffold(
+      appBar: GlassAppBar(title: Text(s.settingsTitle)),
       body: ContentConstraint(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+          padding: EdgeInsets.fromLTRB(16, 4, 16, 32 + MediaQuery.paddingOf(context).bottom),
           children: [
             SectionHeader(s.appearance),
             CustomCard(
@@ -206,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   ListTile(
                     leading: const Icon(Icons.info_outline_rounded),
                     title: Text(s.version),
-                    trailing: Text(d('1.0.0'), style: TextStyle(color: scheme.onSurfaceVariant)),
+                    trailing: Text(d('1.1.0'), style: TextStyle(color: scheme.onSurfaceVariant)),
                   ),
                   ListTile(
                     leading: const Icon(Icons.code_rounded),

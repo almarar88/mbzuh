@@ -203,7 +203,7 @@ class S {
   String get settingsTitle => t('الإعدادات', 'Settings');
   String get appearance => t('المظهر', 'Appearance');
   String get themeMode => t('وضع الألوان', 'Theme');
-  String get themeSystem => t('حسب النظام', 'System');
+  String get themeSystem => t('تلقائي', 'Auto');
   String get themeLight => t('فاتح', 'Light');
   String get themeDark => t('داكن', 'Dark');
   String get language => t('اللغة', 'Language');

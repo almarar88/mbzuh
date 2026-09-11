@@ -9,6 +9,7 @@ import '../../../core/utils/responsive.dart';
 import '../../../services/currency_service.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 
 class VatScreen extends StatefulWidget {
   const VatScreen({super.key});
@@ -29,8 +30,8 @@ class _VatScreenState extends State<VatScreen> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
-    return Scaffold(
-      appBar: AppBar(
+    return GlassScaffold(
+      appBar: GlassAppBar(
         title: Text(s.vatTitle),
         bottom: TabBar(controller: _tabs, tabs: [Tab(text: s.vatTab), Tab(text: s.discountTab)]),
       ),

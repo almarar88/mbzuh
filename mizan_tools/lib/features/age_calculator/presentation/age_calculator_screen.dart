@@ -7,6 +7,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 
 class AgeResult {
   const AgeResult({
@@ -102,8 +103,8 @@ class _AgeCalculatorScreenState extends State<AgeCalculatorScreen> {
     final r = _result;
     final birth = _birth;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(s.ageTitle)),
+    return GlassScaffold(
+      appBar: GlassAppBar(title: Text(s.ageTitle)),
       body: ContentConstraint(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

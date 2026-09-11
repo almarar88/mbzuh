@@ -10,6 +10,7 @@ import '../../../core/utils/responsive.dart';
 import '../../../services/currency_service.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../shared/widgets/glass.dart';
 
 class CurrencyScreen extends StatefulWidget {
   const CurrencyScreen({super.key});
@@ -57,11 +58,11 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
 
     final statusColor = fx.isLive ? AppColors.hijri : Colors.orange;
     final updatedText = fx.updatedAt == null
-        ? s.currencyOffline
-        : s.lastUpdated(DateFormat('d MMM yyyy، h:mm a', ar ? 'ar' : 'en').format(fx.updatedAt!));
+        ? null
+        : s.lastUpdated(Fmt.western(DateFormat('d MMM yyyy، h:mm a', ar ? 'ar' : 'en').format(fx.updatedAt!)));
 
-    return Scaffold(
-      appBar: AppBar(
+    return GlassScaffold(
+      appBar: GlassAppBar(
         title: Text(s.currencyTitle),
         actions: [
           IconButton(
@@ -84,7 +85,7 @@ class _CurrencyScreenState extends State<CurrencyScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${fx.isLive ? s.currencyLive : s.currencyOffline} · ${d(updatedText)}',
+                    updatedText == null ? s.currencyOffline : '${s.currencyLive} · ${d(updatedText)}',
                     style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                   ),
                 ),
