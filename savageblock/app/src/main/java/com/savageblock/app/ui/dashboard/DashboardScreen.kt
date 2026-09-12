@@ -5,12 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,7 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -57,6 +62,9 @@ import com.savageblock.app.ui.theme.Steel
 import com.savageblock.app.ui.theme.Void
 import com.savageblock.app.util.PermissionState
 
+/** Width at which the dashboard switches to two panes (unfolded foldables, tablets, desktop windows). */
+private val TwoPaneBreakpoint = 720.dp
+
 @Composable
 fun DashboardScreen(
     settings: Settings,
@@ -73,115 +81,154 @@ fun DashboardScreen(
 ) {
     val monitoredMinutes = settings.apps.sumOf { stats.minutesFor(it.packageName) }
 
-    LazyColumn(
-        Modifier.fillMaxSize().background(Void).systemBarsPadding(),
-        contentPadding = PaddingValues(bottom = 40.dp),
-    ) {
-        item { HazardStripes() }
-
-        item {
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("SAVAGEBLOCK", style = MaterialTheme.typography.displaySmall, color = Bone)
-                        Text("كافي تضييع", style = MaterialTheme.typography.titleLarge, color = Acid)
-                    }
-                    StatusPill(running = serviceRunning && settings.monitoringEnabled)
-                }
-            }
-        }
-
-        if (!permissions.essentialsGranted) {
-            item {
-                Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp)) {
-                    BrutalCard(borderColor = Crimson, shadowColor = Crimson) {
-                        Text("صلاحيات ناقصة", style = MaterialTheme.typography.titleLarge, color = Crimson)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "بدون صلاحية الاستخدام والظهور فوق التطبيقات ما أقدر أضبطك. أعطني إياها وبعدين نتكلم.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Ash,
+    // Re-measured live on fold / unfold thanks to configChanges in the manifest.
+    BoxWithConstraints(Modifier.fillMaxSize().background(Void).systemBarsPadding()) {
+        val twoPane = maxWidth >= TwoPaneBreakpoint
+        Column(Modifier.fillMaxSize()) {
+            HazardStripes()
+            Header(running = serviceRunning && settings.monitoringEnabled)
+            if (twoPane) {
+                Row(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                            .padding(start = 20.dp, end = 10.dp, bottom = 40.dp),
+                    ) {
+                        ControlSections(
+                            settings, permissions, serviceRunning, monitoredMinutes, stats.blocks,
+                            onToggleMonitoring, onGoal, onAggression, onFixPermissions,
                         )
-                        Spacer(Modifier.height(12.dp))
-                        BrutalButton(text = "أصلح الصلاحيات", onClick = onFixPermissions, modifier = Modifier.fillMaxWidth())
                     }
+                    LazyColumn(
+                        Modifier.weight(1f).fillMaxHeight(),
+                        contentPadding = PaddingValues(start = 10.dp, end = 20.dp, bottom = 40.dp),
+                    ) {
+                        appsSection(settings, stats, onLimit, onRemove, onAddApps)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 40.dp),
+                ) {
+                    item {
+                        ControlSections(
+                            settings, permissions, serviceRunning, monitoredMinutes, stats.blocks,
+                            onToggleMonitoring, onGoal, onAggression, onFixPermissions,
+                        )
+                    }
+                    appsSection(settings, stats, onLimit, onRemove, onAddApps)
                 }
             }
         }
+    }
+}
 
-        item {
-            Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
-                MonitorCard(
-                    enabled = settings.monitoringEnabled,
-                    running = serviceRunning,
-                    appCount = settings.apps.size,
-                    canStart = permissions.essentialsGranted && settings.apps.isNotEmpty(),
-                    onToggle = onToggleMonitoring,
-                )
-            }
+@Composable
+private fun Header(running: Boolean) {
+    Row(
+        Modifier.padding(horizontal = 20.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("SAVAGEBLOCK", style = MaterialTheme.typography.displaySmall, color = Bone)
+            Text("كافي تضييع", style = MaterialTheme.typography.titleLarge, color = Acid)
         }
+        StatusPill(running = running)
+    }
+}
 
-        item {
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                SectionTitle("جدار العار")
-                HallOfShameCard(minutes = monitoredMinutes, strikes = stats.blocks)
-                Spacer(Modifier.height(24.dp))
-            }
-        }
-
-        item {
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                SectionTitle("هدفك الأساسي", accent = Acid)
+/** Everything except the app list: permissions warning, monitor toggle, shame, goal, aggression. */
+@Composable
+private fun ControlSections(
+    settings: Settings,
+    permissions: PermissionState,
+    serviceRunning: Boolean,
+    monitoredMinutes: Int,
+    strikes: Int,
+    onToggleMonitoring: (Boolean) -> Unit,
+    onGoal: (Goal) -> Unit,
+    onAggression: (AggressionLevel) -> Unit,
+    onFixPermissions: () -> Unit,
+) {
+    Column {
+        if (!permissions.essentialsGranted) {
+            BrutalCard(borderColor = Crimson, shadowColor = Crimson) {
+                Text("صلاحيات ناقصة", style = MaterialTheme.typography.titleLarge, color = Crimson)
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "أذكّرك بنقطة ضعفك بالضبط لما تضيع وقتك.",
-                    style = MaterialTheme.typography.bodySmall,
+                    "بدون صلاحية الاستخدام والظهور فوق التطبيقات ما أقدر أضبطك. أعطني إياها وبعدين نتكلم.",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = Ash,
                 )
-                Spacer(Modifier.height(10.dp))
-                GoalSelector(selected = settings.goal, onSelect = onGoal)
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(12.dp))
+                BrutalButton(text = "أصلح الصلاحيات", onClick = onFixPermissions, modifier = Modifier.fillMaxWidth())
             }
+            Spacer(Modifier.height(16.dp))
         }
 
+        MonitorCard(
+            enabled = settings.monitoringEnabled,
+            running = serviceRunning,
+            appCount = settings.apps.size,
+            canStart = permissions.essentialsGranted && settings.apps.isNotEmpty(),
+            onToggle = onToggleMonitoring,
+        )
+        Spacer(Modifier.height(20.dp))
+
+        SectionTitle("جدار العار")
+        HallOfShameCard(minutes = monitoredMinutes, strikes = strikes)
+        Spacer(Modifier.height(24.dp))
+
+        SectionTitle("هدفك الأساسي", accent = Acid)
+        Text(
+            "أذكّرك بنقطة ضعفك بالضبط لما تضيع وقتك.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Ash,
+        )
+        Spacer(Modifier.height(10.dp))
+        GoalSelector(selected = settings.goal, onSelect = onGoal)
+        Spacer(Modifier.height(24.dp))
+
+        SectionTitle("مستوى الوقاحة")
+        AggressionSelector(selected = settings.aggression, onSelect = onAggression)
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** The monitored-app list, shared by the single-column and two-pane layouts. */
+private fun LazyListScope.appsSection(
+    settings: Settings,
+    stats: DailyStats,
+    onLimit: (String, Int) -> Unit,
+    onRemove: (String) -> Unit,
+    onAddApps: () -> Unit,
+) {
+    item {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SectionTitle("التطبيقات المحظورة", modifier = Modifier.weight(1f), accent = Acid)
+            BrutalButton(text = "+ أضف", onClick = onAddApps, container = Acid, content = Void)
+        }
+        Spacer(Modifier.height(4.dp))
+    }
+    if (settings.apps.isEmpty()) {
         item {
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                SectionTitle("مستوى الوقاحة")
-                AggressionSelector(selected = settings.aggression, onSelect = onAggression)
-                Spacer(Modifier.height(24.dp))
+            BrutalCard(shadowColor = Concrete, borderColor = Ash) {
+                Text("ما فيه تطبيقات تحت المراقبة.", style = MaterialTheme.typography.titleMedium, color = Bone)
+                Text("يعني تضيع وقتك بحرية؟ أضف تيك توك وإنستقرام وخلّنا نبدأ.", style = MaterialTheme.typography.bodyMedium, color = Ash)
             }
         }
-
-        item {
-            Row(
-                Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SectionTitle("التطبيقات المحظورة", modifier = Modifier.weight(1f), accent = Acid)
-                BrutalButton(text = "+ أضف", onClick = onAddApps, container = Acid, content = Void)
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-
-        if (settings.apps.isEmpty()) {
-            item {
-                Box(Modifier.padding(horizontal = 20.dp)) {
-                    BrutalCard(shadowColor = Concrete, borderColor = Ash) {
-                        Text("ما فيه تطبيقات تحت المراقبة.", style = MaterialTheme.typography.titleMedium, color = Bone)
-                        Text("يعني تضيع وقتك بحرية؟ أضف تيك توك وإنستقرام وخلّنا نبدأ.", style = MaterialTheme.typography.bodyMedium, color = Ash)
-                    }
-                }
-            }
-        }
-
-        items(settings.apps, key = { it.packageName }) { app ->
-            Box(Modifier.padding(horizontal = 20.dp).padding(bottom = 14.dp)) {
-                MonitoredAppCard(
-                    app = app,
-                    usedMinutes = stats.minutesFor(app.packageName),
-                    onLimit = { onLimit(app.packageName, it) },
-                    onRemove = { onRemove(app.packageName) },
-                )
-            }
+    }
+    items(settings.apps, key = { it.packageName }) { app ->
+        Box(Modifier.padding(bottom = 14.dp)) {
+            MonitoredAppCard(
+                app = app,
+                usedMinutes = stats.minutesFor(app.packageName),
+                onLimit = { onLimit(app.packageName, it) },
+                onRemove = { onRemove(app.packageName) },
+            )
         }
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +50,13 @@ fun OnboardingScreen(
             .verticalScroll(rememberScrollState()),
     ) {
         HazardStripes()
-        Column(Modifier.padding(24.dp)) {
+        Column(
+            Modifier
+                .widthIn(max = 720.dp)
+                .align(Alignment.CenterHorizontally)
+                .fillMaxWidth()
+                .padding(24.dp),
+        ) {
             Text("SAVAGEBLOCK", style = MaterialTheme.typography.displaySmall, color = Bone)
             Text("كافي تضييع", style = MaterialTheme.typography.headlineMedium, color = Acid)
             Spacer(Modifier.height(12.dp))

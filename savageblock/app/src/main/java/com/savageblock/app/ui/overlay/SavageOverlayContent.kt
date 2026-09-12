@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -90,7 +91,14 @@ fun SavageOverlayContent(session: OverlaySession, onLeave: () -> Unit) {
             .verticalScroll(rememberScrollState()),
     ) {
         HazardStripes(colorA = Crimson)
-        Column(Modifier.fillMaxWidth().padding(24.dp)) {
+        // On unfolded foldables / tablets keep the roast column readable instead of edge-to-edge.
+        Column(
+            Modifier
+                .widthIn(max = 720.dp)
+                .align(Alignment.CenterHorizontally)
+                .fillMaxWidth()
+                .padding(24.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp).alpha(blink).background(Crimson))
                 Spacer(Modifier.width(10.dp))

@@ -19,6 +19,20 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    // Release signing is opt-in: pass -PsbKeystore=... -PsbStorePass=... -PsbKeyAlias=... -PsbKeyPass=...
+    // (the release workflow does this). Without them the release APK is left unsigned.
+    val sbKeystore = (project.findProperty("sbKeystore") as String?)?.takeIf { it.isNotBlank() }
+    if (sbKeystore != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(sbKeystore)
+                storePassword = project.findProperty("sbStorePass") as String?
+                keyAlias = project.findProperty("sbKeyAlias") as String?
+                keyPassword = project.findProperty("sbKeyPass") as String?
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -27,6 +41,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"
