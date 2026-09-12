@@ -31,9 +31,10 @@ android {
         release {
             // Signed with the debug key so the APK installs directly (no Play Store signing needed).
             signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Keep R8 resource shrinking off: the notification icon is referenced
+            // only from Dart and was being stripped, which crashed startup.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

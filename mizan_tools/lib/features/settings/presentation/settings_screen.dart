@@ -207,7 +207,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   ListTile(
                     leading: const Icon(Icons.info_outline_rounded),
                     title: Text(s.version),
-                    trailing: Text(d('1.1.0'), style: TextStyle(color: scheme.onSurfaceVariant)),
+                    trailing: Text(d('1.1.1'), style: TextStyle(color: scheme.onSurfaceVariant)),
                   ),
                   ListTile(
                     leading: const Icon(Icons.code_rounded),

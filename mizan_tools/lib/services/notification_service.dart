@@ -21,6 +21,7 @@ class NotificationService {
 
   /// Notifications are Android-only; on other targets every call is a no-op.
   bool get _supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _usable => _supported && _ready;
 
   Future<void> init() async {
     if (_ready || !_supported) return;
@@ -32,20 +33,36 @@ class NotificationService {
       tz.setLocalLocation(tz.UTC);
     }
 
-    await _plugin.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@drawable/ic_notification'),
-      ),
-      onDidReceiveNotificationResponse: (resp) => lastPayload.value = resp.payload,
-    );
-    _ready = true;
+    try {
+      await _plugin.initialize(
+        settings: const InitializationSettings(
+          android: AndroidInitializationSettings('@drawable/ic_notification'),
+        ),
+        onDidReceiveNotificationResponse: (resp) => lastPayload.value = resp.payload,
+      );
+      _ready = true;
+    } catch (e) {
+      // Fall back to the launcher icon if the small icon is missing for any reason.
+      debugPrint('Notification init failed ($e); retrying with launcher icon');
+      await _plugin.initialize(
+        settings: const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+        onDidReceiveNotificationResponse: (resp) => lastPayload.value = resp.payload,
+      );
+      _ready = true;
+    }
   }
+
+  /// True once the plugin is initialised on a supported platform.
+  bool get isReady => _ready;
 
   AndroidFlutterLocalNotificationsPlugin? get _android =>
       _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
   Future<bool> requestPermissions() async {
     if (!_supported) return true;
+    if (!_ready) await init();
     final android = _android;
     if (android == null) return false;
     final notif = await android.requestNotificationsPermission() ?? false;
@@ -58,11 +75,13 @@ class NotificationService {
 
   Future<bool> notificationsGranted() async {
     if (!_supported) return true;
+    if (!_ready) await init();
     return await _android?.areNotificationsEnabled() ?? false;
   }
 
   Future<bool> exactAlarmsGranted() async {
     if (!_supported) return true;
+    if (!_ready) await init();
     return await _android?.canScheduleExactNotifications() ?? false;
   }
 
@@ -114,6 +133,8 @@ class NotificationService {
     required bool ar,
   }) async {
     if (!_supported) return;
+    if (!_ready) await init();
+    if (!_usable) return;
     await cancelAlarm(alarmId);
     final details = _alarmDetails(ar: ar);
     if (weekdays.isEmpty) {
@@ -144,6 +165,8 @@ class NotificationService {
 
   Future<void> cancelAlarm(int alarmId) async {
     if (!_supported) return;
+    if (!_ready) await init();
+    if (!_usable) return;
     for (var i = 0; i <= 7; i++) {
       await _plugin.cancel(id: alarmId * 10 + i);
     }
@@ -151,6 +174,8 @@ class NotificationService {
 
   Future<void> scheduleTimer(Duration d, {required bool ar, required String title, required String body}) async {
     if (!_supported) return;
+    if (!_ready) await init();
+    if (!_usable) return;
     await cancelTimer();
     final when = tz.TZDateTime.now(tz.local).add(d);
     await _plugin.zonedSchedule(
@@ -166,11 +191,15 @@ class NotificationService {
 
   Future<void> cancelTimer() async {
     if (!_supported) return;
+    if (!_ready) await init();
+    if (!_usable) return;
     await _plugin.cancel(id: timerNotificationId);
   }
 
   Future<void> showTest({required bool ar}) async {
     if (!_supported) return;
+    if (!_ready) await init();
+    if (!_usable) return;
     await _plugin.show(
         id: 1,
         title: ar ? 'ميزان' : 'Mizan',

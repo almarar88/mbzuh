@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -17,12 +19,8 @@ Future<void> main() async {
   await initializeDateFormatting('en');
 
   final prefs = await SharedPreferences.getInstance();
-  await NotificationService.instance.init();
-
   final settings = SettingsService(prefs);
   final alarms = AlarmStore(prefs);
-  // Make sure the OS schedule matches the saved alarms (after updates/reboots).
-  await alarms.resyncAll(ar: settings.isArabic, defaultTitle: settings.isArabic ? 'المنبه' : 'Alarm');
 
   runApp(
     MultiProvider(
@@ -34,4 +32,19 @@ Future<void> main() async {
       child: const MizanApp(),
     ),
   );
+
+  // Notifications are wired after the first frame so a plugin problem can
+  // never keep the app on the splash screen.
+  unawaited(_initNotifications(settings, alarms));
+}
+
+Future<void> _initNotifications(SettingsService settings, AlarmStore alarms) async {
+  try {
+    await NotificationService.instance.init().timeout(const Duration(seconds: 10));
+    // Make sure the OS schedule matches the saved alarms (after updates/reboots).
+    await alarms.resyncAll(ar: settings.isArabic, defaultTitle: settings.isArabic ? 'المنبه' : 'Alarm');
+  } catch (e, st) {
+    debugPrint('Notification setup failed: $e');
+    debugPrintStack(stackTrace: st, maxFrames: 10);
+  }
 }

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Resources referenced only from Dart must survive any future resource shrinking. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification,@mipmap/ic_launcher,@mipmap/ic_launcher_foreground,@mipmap/ic_launcher_background" />
