@@ -10,6 +10,10 @@ on:
   push:
     tags:
       - "savageblock-v*"
+    branches:
+      - "**"
+    paths:
+      - "savageblock/RELEASE_VERSION"
 
 permissions:
   contents: write
@@ -27,8 +31,10 @@ jobs:
       - name: تحديد رقم الإصدار
         id: ver
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ github.ref_type }}" = "tag" ]; then
             v="${GITHUB_REF_NAME#savageblock-v}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            v="$(tr -d '[:space:]' < RELEASE_VERSION)"
           else
             v="${{ github.event.inputs.version }}"
           fi
