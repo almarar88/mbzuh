@@ -1,0 +1,3 @@
+-keepattributes Signature,*Annotation*
+-dontwarn okhttp3.**
+-dontwarn okio.**

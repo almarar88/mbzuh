@@ -1,0 +1,64 @@
+name: بناء قرار لأندرويد
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "وسم الإصدار الذي سيُنشر (مثال qarar-v1.0.0)"
+        required: true
+        default: "qarar-v1.0.0"
+  push:
+    tags:
+      - "qarar-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: qarar-android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.14.3
+
+      - name: الاختبارات
+        run: gradle testDebugUnitTest --no-daemon
+
+      - name: بناء APK موقّع
+        run: gradle assembleRelease --no-daemon
+
+      - name: تسمية الملف
+        run: cp app/build/outputs/apk/release/app-release.apk "Qarar-${{ github.event.inputs.tag || github.ref_name }}.apk"
+
+      - name: رفع APK كمُخرَج
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qarar-APK
+          path: qarar-android/Qarar-*.apk
+          if-no-files-found: error
+
+      - name: نشر الإصدار
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: قرار ${{ github.event.inputs.tag || github.ref_name }}
+          files: qarar-android/Qarar-*.apk
+          body: |
+            ## قرار — مستشار القرارات الذكي (أندرويد)
+
+            نزّل ملف `Qarar-*.apk` وثبّته (فعّل «مصادر غير معروفة» إن طُلب).
+            يتطلب أندرويد 8.0 فأعلى. يعمل الذكاء الاصطناعي بمفتاح Claude API الخاص بك من الإعدادات.
