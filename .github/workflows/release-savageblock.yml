@@ -7,6 +7,9 @@ on:
         description: "رقم الإصدار (مثال 1.0.0) — يُنشأ الوسم savageblock-v<version>"
         required: true
         default: "1.0.0"
+  push:
+    tags:
+      - "savageblock-v*"
 
 permissions:
   contents: write
@@ -20,6 +23,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: تحديد رقم الإصدار
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            v="${GITHUB_REF_NAME#savageblock-v}"
+          else
+            v="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "الإصدار: $v"
 
       - uses: actions/setup-java@v4
         with:
@@ -69,28 +83,28 @@ jobs:
             -PsbKeyAlias="$SB_KEY_ALIAS" \
             -PsbKeyPass="$SB_KEY_PASS"
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/SavageBlock-${{ github.event.inputs.version }}.apk"
-          cp app/build/outputs/mapping/release/mapping.txt "dist/SavageBlock-${{ github.event.inputs.version }}-mapping.txt"
+          cp app/build/outputs/apk/release/app-release.apk "dist/SavageBlock-${{ steps.ver.outputs.version }}.apk"
+          cp app/build/outputs/mapping/release/mapping.txt "dist/SavageBlock-${{ steps.ver.outputs.version }}-mapping.txt"
           ls -la dist
 
       - name: التحقق من التوقيع
         run: |
           "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" \
-            verify --print-certs "dist/SavageBlock-${{ github.event.inputs.version }}.apk"
+            verify --print-certs "dist/SavageBlock-${{ steps.ver.outputs.version }}.apk"
 
       - name: رفع APK كمُخرَج
         uses: actions/upload-artifact@v4
         with:
-          name: SavageBlock-${{ github.event.inputs.version }}
+          name: SavageBlock-${{ steps.ver.outputs.version }}
           path: savageblock/dist/*
           if-no-files-found: error
 
       - name: نشر الإصدار
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: savageblock-v${{ github.event.inputs.version }}
+          tag_name: savageblock-v${{ steps.ver.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: SavageBlock ${{ github.event.inputs.version }}
+          name: SavageBlock ${{ steps.ver.outputs.version }}
           make_latest: false
           files: savageblock/dist/*
           body: |
@@ -101,7 +115,7 @@ jobs:
             بتخطيط ثنائي الأعمدة عند فتح الشاشة.
 
             ### التثبيت
-            1. نزّل `SavageBlock-${{ github.event.inputs.version }}.apk` وافتحه.
+            1. نزّل `SavageBlock-${{ steps.ver.outputs.version }}.apk` وافتحه.
             2. اسمح بـ «تثبيت تطبيقات من مصادر غير معروفة» إذا طلب النظام.
             3. أعطِ التطبيق صلاحيتي **الوصول لبيانات الاستخدام** و**الظهور فوق التطبيقات** من شاشة البداية.
 
