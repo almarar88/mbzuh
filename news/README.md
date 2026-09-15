@@ -2,7 +2,7 @@
 
 <div align="center"><strong>تطوير Alcode</strong></div>
 
-تطبيق **سطح مكتب لويندوز** متخصص في أخبار التقنية والذكاء الاصطناعي **فقط**.
+تطبيق **لأندرويد (APK) ولويندوز** متخصص في أخبار التقنية والذكاء الاصطناعي **فقط**.
 يجلب الأخبار مباشرة من الإنترنت لحظة طلبها، يعرض كل خبر بتفاصيله الكاملة
 وصوره، يترجم ما ليس بالعربية، ويضم **وكيل ذكاء اصطناعي** يبحث ويجمع ويحلّل.
 
@@ -11,11 +11,17 @@
 ## ⬇️ التحميل
 
 من [صفحة الإصدارات](https://github.com/almarar88/mbzuh/releases) اختر آخر إصدار
-يبدأ بـ `news-v` ونزّل `TechPulse-Setup-1.0.0.exe`، ثم شغّله واتبع خطوات
-التثبيت (يُثبَّت للمستخدم الحالي بلا صلاحيات مدير).
+يبدأ بـ `news-v`:
 
-> ويندوز قد يُظهر تنبيه «SmartScreen» لأن الملف غير موقّع رقميًا — اختر
-> «مزيد من المعلومات» ثم «تشغيل على أي حال».
+| المنصة | الملف | التثبيت |
+|---|---|---|
+| **أندرويد** (8.0+) | `TechPulse-news-vX.Y.Z.apk` | افتح الملف على الهاتف وفعّل «تثبيت من مصادر غير معروفة» عند الطلب. |
+| **ويندوز** (64-بت) | `TechPulse-Setup-X.Y.Z.exe` | شغّله واتبع الخطوات (بلا صلاحيات مدير). قد يظهر تنبيه SmartScreen — «مزيد من المعلومات» ثم «تشغيل على أي حال». |
+
+### 📱 دعم الهواتف القابلة للطي (Fold)
+- **مطويًا** (شاشة ضيقة): شريط تبويبات سفلي (الأخبار، الذكاء الاصطناعي، الوكيل، المحفوظات، المزيد)، عمود واحد للأخبار، وصفحة الخبر بعمود واحد مع لوحة التحليل أسفل النص.
+- **مفتوحًا** (شاشة عريضة): شريط جانبي كامل، شبكة أخبار بعمودين أو أكثر، وصفحة الخبر بعمودين (النص + لوحة التحليل).
+- الانتقال بين الحالتين فوري بلا إعادة تشغيل: النشاط مُعلَن `resizeableActivity` ويعالج تغيّر حجم الشاشة والكثافة بنفسه، والواجهة تستجيب لـ media queries لحظيًا. الهوامش تحترم شريط الحالة والتنقل (safe areas) في وضع الحافة إلى الحافة.
 
 ---
 
@@ -59,6 +65,20 @@ npm run build        # بناء ملفات الإنتاج
 npm run smoke        # اختبار دخان للخدمات على مصادر حقيقية (بلا Electron)
 ```
 
+### إنتاج APK لأندرويد
+
+```bash
+npm run android:apk  # يبني الواجهة، يزامن Capacitor، ويشغّل gradlew assembleRelease
+# الناتج: android/app/build/outputs/apk/release/app-release.apk
+```
+
+يتطلب JDK 17+ وAndroid SDK (platform 35 + build-tools 35). سير عمل جاهز في
+`.github/workflows/build-news-android.yml` يبني الـAPK على GitHub وينشره مع
+الإصدار. **التوقيع**: يُستخدم مفتاح تطوير مرفق في `android/app/keystore/`
+كي يبقى التوقيع ثابتًا بين الإصدارات (فتنجح الترقية دون حذف التطبيق). للنشر
+العام ضع مفتاحك في أسرار GitHub: `ANDROID_KEYSTORE_BASE64`،
+`ANDROID_KEYSTORE_PASSWORD`، `ANDROID_KEY_ALIAS`، `ANDROID_KEY_PASSWORD`.
+
 ### إنتاج ملف التثبيت لويندوز
 
 ```bash
@@ -74,9 +94,10 @@ npm run dist:win:zip # حزمة مضغوطة تعمل بلا تثبيت (تُب�
 
 ## أين تُحفظ البيانات؟
 
-| المسار (ويندوز) | المحتوى |
+| المسار | المحتوى |
 |---|---|
-| `%APPDATA%\TechPulse\techpulse.db` | قاعدة SQLite: الأخبار، المصادر، الترجمات، المحادثات، الإعدادات (بما فيها المفاتيح) |
+| ويندوز: `%APPDATA%\TechPulse\techpulse.db` | قاعدة SQLite: الأخبار، المصادر، الترجمات، المحادثات، الإعدادات (بما فيها المفاتيح) |
+| أندرويد: بيانات التطبيق الخاصة `techpulse.db` | القاعدة نفسها (sql.js) تُحفظ في تخزين التطبيق الخاص، وتُحذف مع إلغاء التثبيت |
 
 لا يُرسل التطبيق أي بيانات إلى خادم خاص به. الاتصالات الخارجية: مصادر الأخبار
 التي تختارها، خدمات الترجمة، Anthropic (إن ضبطت مفتاحًا)، وX (إن ضبطت مفتاحًا).
@@ -87,27 +108,32 @@ npm run dist:win:zip # حزمة مضغوطة تعمل بلا تثبيت (تُب�
 
 ```
 news/
-├─ electron/            العملية الرئيسية
-│  ├─ db/               SQLite (node:sqlite) + المخطط
-│  ├─ services/
-│  │  ├─ aggregator.ts  محرّك التجميع: جلب → تصنيف → إزالة المكرر → تخزين → تفاصيل → ترجمة
-│  │  ├─ rss.ts         محلّل RSS/Atom       · reddit.ts  JSON ثم RSS
-│  │  ├─ x.ts           API v2 → syndication → Nitter
-│  │  ├─ gnews.ts       أخبار Google + فكّ الروابط الأصلية
-│  │  ├─ web.ts         Readability + JSON-LD + تعقيم HTML + الصور
-│  │  ├─ classify.ts    مصنّف تقني/ذكاء اصطناعي (عربي + إنجليزي)
-│  │  ├─ translate.ts   Google → MyMemory → Claude مع ذاكرة تخزين
-│  │  ├─ search.ts      Bing RSS / DuckDuckGo / Google News
-│  │  ├─ analyze.ts     تحليل بالنموذج (JSON) أو تلخيص محلي
-│  │  ├─ llm.ts         عميل Anthropic SDK
-│  │  └─ agent.ts       حلقة أدوات الوكيل مع بث الأحداث
-│  └─ ipc/              قنوات الاتصال مع الواجهة
+├─ core/                المنطق المشترك بين أندرويد وويندوز (بلا اعتماد على Node)
+│  ├─ db.ts             واجهة قاعدة البيانات + المخطط
+│  ├─ platform.ts       نقاط الالتصاق بالمنصة (تحليل HTML، البيئة)
+│  └─ services/
+│     ├─ aggregator.ts  محرّك التجميع: جلب → تصنيف → إزالة المكرر → تخزين → تفاصيل → ترجمة
+│     ├─ rss.ts         محلّل RSS/Atom       · reddit.ts  JSON ثم RSS
+│     ├─ x.ts           API v2 → syndication → Nitter
+│     ├─ gnews.ts       أخبار Google + فكّ الروابط الأصلية
+│     ├─ web.ts         Readability + JSON-LD + تعقيم HTML + الصور
+│     ├─ classify.ts    مصنّف تقني/ذكاء اصطناعي (عربي + إنجليزي)
+│     ├─ translate.ts   Google → MyMemory → Claude مع ذاكرة تخزين
+│     ├─ search.ts      Bing RSS / DuckDuckGo / Google News
+│     ├─ analyze.ts     تحليل بالنموذج (JSON) أو تلخيص محلي
+│     ├─ llm.ts         عميل Anthropic SDK
+│     └─ agent.ts       حلقة أدوات الوكيل مع بث الأحداث
+├─ electron/            ويندوز: node:sqlite + linkedom + net.fetch + قنوات IPC
+├─ android/             مشروع Capacitor لأندرويد (Gradle)
 ├─ shared/types.ts      الأنواع المشتركة
-└─ src/                 واجهة React + Tailwind (RTL، داكن/فاتح)
+└─ src/                 واجهة React + Tailwind (RTL، داكن/فاتح، متجاوبة)
+   └─ platform/         أندرويد/الويب: sql.js + CapacitorHttp + Filesystem + Browser
 ```
 
-- **Electron 38** + **React 19** + **TypeScript** + **Vite 7** + **Tailwind CSS 4**
-- الشبكة عبر `net.fetch` (شبكة Chromium) لتمر من المواقع التي تحجب العملاء غير المتصفحية.
+- **Electron 38** + **Capacitor 7** + **React 19** + **TypeScript** + **Vite 7** + **Tailwind CSS 4**
+- الواجهة واحدة للمنصتين: في Electron تتصل بالعملية الرئيسية عبر IPC، وعلى أندرويد تشغّل
+  الخدمات نفسها داخل WebView مع SQLite بـ WASM وطلبات شبكة أصلية عبر CapacitorHttp (بلا CORS).
+- على ويندوز الشبكة عبر `net.fetch` (شبكة Chromium) لتمر من المواقع التي تحجب العملاء غير المتصفحية.
 - أمان الواجهة: `contextIsolation` مُفعّل، بلا `nodeIntegration`، جسر IPC محصور
   بقنوات مسموح بها، HTML المقالات يُعقَّم في العملية الرئيسية قبل عرضه، والروابط
   تُفتح في المتصفح الخارجي.

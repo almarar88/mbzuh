@@ -1,9 +1,9 @@
 import type { IpcMain } from "electron";
 import { shell } from "electron";
 import type { FeedQuery } from "@shared/types";
-import { aggregator } from "../services/aggregator";
-import { addSource, deleteSource, feedStats, getArticle, listArticles, listSources, updateArticle, updateSource, getSource } from "../services/articles";
-import { classify } from "../services/classify";
+import { aggregator } from "../../core/services/aggregator";
+import { addSource, deleteSource, feedStats, getArticle, listArticles, listSources, updateArticle, updateSource, getSource } from "../../core/services/articles";
+import { classify } from "../../core/services/classify";
 
 export function registerNewsIpc(ipc: IpcMain): void {
   ipc.handle("feed:list", (_e, q: FeedQuery) => listArticles(q ?? {}));

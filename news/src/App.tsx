@@ -10,6 +10,8 @@ import { SettingsPage } from "@/pages/Settings";
 
 export type Page = "feed" | "ai" | "tech" | "social" | "saved" | "agent" | "sources" | "settings";
 
+const PRIMARY_TABS: Page[] = ["feed", "ai", "agent", "saved"];
+
 const NAV: { id: Page; label: string; icon: string }[] = [
   { id: "feed", label: "آخر الأخبار", icon: "🗞️" },
   { id: "ai", label: "الذكاء الاصطناعي", icon: "🤖" },
@@ -62,6 +64,10 @@ function Shell() {
     });
     const offC = api.on.command((c) => {
       if (c === "refresh") void refresh();
+      if (c === "back") {
+        setArticleId((cur) => (cur ? null : cur));
+        setMoreOpen(false);
+      }
       if (c === "search") {
         setArticleId(null);
         setPage("feed");
@@ -105,10 +111,23 @@ function Shell() {
   };
 
   const busy = progress && progress.phase !== "done";
+  const [moreOpen, setMoreOpen] = useState(false);
+  const current = NAV.find((n) => n.id === page);
+  const progressLabel = progress
+    ? progress.phase === "start"
+      ? "بدء التحديث…"
+      : progress.phase === "source"
+        ? `جلب: ${progress.sourceName ?? ""} (${progress.done}/${progress.total})`
+        : progress.phase === "details"
+          ? `جلب التفاصيل والصور (${progress.done}/${progress.total})`
+          : progress.phase === "translate"
+            ? `ترجمة العناوين (${progress.done}/${progress.total})`
+            : `اكتمل: ${progress.added} خبر جديد`
+    : null;
 
   return (
-    <div className="flex h-full">
-      <aside className="w-60 shrink-0 flex flex-col p-3 gap-1" style={{ background: "var(--panel)", borderInlineEnd: "1px solid var(--border)" }}>
+    <div className="app-shell">
+      <aside className="sidebar">
         <div className="flex items-center gap-2 px-2 py-3 mb-2">
           <div className="text-2xl">⚡</div>
           <div>
@@ -127,13 +146,7 @@ function Shell() {
         <div className="mt-auto flex flex-col gap-2 px-1">
           {progress && (
             <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-              <div className="mb-1 truncate">
-                {progress.phase === "start" && "بدء التحديث…"}
-                {progress.phase === "source" && `جلب: ${progress.sourceName ?? ""} (${progress.done}/${progress.total})`}
-                {progress.phase === "details" && `جلب التفاصيل والصور (${progress.done}/${progress.total})`}
-                {progress.phase === "translate" && `ترجمة العناوين (${progress.done}/${progress.total})`}
-                {progress.phase === "done" && `اكتمل: ${progress.added} خبر جديد`}
-              </div>
+              <div className="mb-1 truncate">{progressLabel}</div>
               <div className="progress"><div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 10}%` }} /></div>
             </div>
           )}
@@ -147,7 +160,20 @@ function Shell() {
           )}
         </div>
       </aside>
-      <main className="flex-1 min-w-0 overflow-hidden">
+      <div className="main-area">
+        {/* شريط علوي للهواتف */}
+        <div className="topbar">
+          {articleId ? (
+            <button className="btn btn-ghost btn-sm" onClick={() => setArticleId(null)}>→ رجوع</button>
+          ) : (
+            <div className="flex items-center gap-2"><span className="text-xl">⚡</span><span className="font-bold">{current?.label ?? "نبض التقنية"}</span></div>
+          )}
+          <span className="ms-auto" />
+          {progress && <span className="text-[11px] truncate max-w-40" style={{ color: "var(--muted)" }}>{progressLabel}</span>}
+          <button className="btn btn-ghost btn-sm" onClick={() => void refresh()} disabled={Boolean(busy)} title="تحديث الأخبار">{busy ? <span className="spinner" /> : "🔄"}</button>
+        </div>
+        {progress && <div className="progress hide-wide" style={{ borderRadius: 0 }}><div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 10}%` }} /></div>}
+      <main className="flex-1 min-w-0 overflow-hidden relative">
         {articleId ? (
           <ArticlePage id={articleId} onBack={() => setArticleId(null)} onOpen={openArticle} onAsk={askAgent} onChanged={loadStats} settings={settings} />
         ) : page === "agent" ? (
@@ -159,7 +185,36 @@ function Shell() {
         ) : (
           <FeedPage key={page} mode={page} version={feedVersion} onOpen={openArticle} onChanged={loadStats} />
         )}
+        {moreOpen && (
+          <div className="absolute inset-0 z-40 hide-wide" style={{ background: "rgb(0 0 0 / .5)" }} onClick={() => setMoreOpen(false)}>
+            <div className="absolute bottom-0 inset-x-0 panel p-3 flex flex-col gap-1" style={{ borderRadius: "16px 16px 0 0" }} onClick={(e) => e.stopPropagation()}>
+              {NAV.filter((n) => !PRIMARY_TABS.includes(n.id)).map((n) => (
+                <div key={n.id} className={`nav-item ${page === n.id && !articleId ? "active" : ""}`} onClick={() => { go(n.id); setMoreOpen(false); }}>
+                  <span>{n.icon}</span><span>{n.label}</span>
+                </div>
+              ))}
+              {stats && <div className="text-[11px] px-3 pt-2" style={{ color: "var(--muted)" }}>{stats.total} خبر · اليوم {stats.today} · ذكاء اصطناعي {stats.ai}</div>}
+            </div>
+          </div>
+        )}
       </main>
+        {/* شريط سفلي للهواتف (وFold مطويًا) */}
+        <nav className="bottom-nav">
+          {PRIMARY_TABS.map((id) => {
+            const n = NAV.find((x) => x.id === id)!;
+            return (
+              <div key={id} className={`tab ${page === id && !articleId && !moreOpen ? "active" : ""}`} onClick={() => { go(id); setMoreOpen(false); }}>
+                <span className="ico">{n.icon}</span>
+                <span>{n.label}</span>
+              </div>
+            );
+          })}
+          <div className={`tab ${moreOpen || (!PRIMARY_TABS.includes(page) && !articleId) ? "active" : ""}`} onClick={() => setMoreOpen((v) => !v)}>
+            <span className="ico">☰</span>
+            <span>المزيد</span>
+          </div>
+        </nav>
+      </div>
     </div>
   );
 }

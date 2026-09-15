@@ -76,17 +76,17 @@ export function FeedPage({ mode, version, onOpen, onChanged }: { mode: Page; ver
 
   return (
     <div className="h-full flex flex-col">
-      <header className="px-6 pt-5 pb-3 flex flex-col gap-3" style={{ borderBottom: "1px solid var(--border)" }}>
-        <div className="flex items-center gap-4">
-          <div>
+      <header className="page-pad pt-4 pb-3 flex flex-col gap-3" style={{ borderBottom: "1px solid var(--border)" }}>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="hide-narrow">
             <h1 className="text-xl font-bold">{t.title}</h1>
             <div className="text-xs" style={{ color: "var(--muted)" }}>{t.hint}</div>
           </div>
-          <div className="ms-auto w-80">
+          <div className="ms-auto w-80 max-w-full flex-1 md:flex-none">
             <input id="feed-search" className="input" placeholder="🔍 ابحث في الأخبار (عربي أو إنجليزي)…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="filters-row">
           {(mode === "feed" || mode === "saved" || mode === "social") && (
             <>
               {(["all", "ai", "tech"] as const).map((c) => (
@@ -104,10 +104,10 @@ export function FeedPage({ mode, version, onOpen, onChanged }: { mode: Page; ver
           ))}
           <span className="mx-1" style={{ color: "var(--border)" }}>|</span>
           <button className={`chip ${unreadOnly ? "active" : ""}`} onClick={() => setUnreadOnly((v) => !v)}>غير المقروء فقط</button>
-          <span className="ms-auto text-xs" style={{ color: "var(--muted)" }}>{items.length} خبر</span>
+          <span className="ms-auto text-xs hide-narrow" style={{ color: "var(--muted)" }}>{items.length} خبر</span>
         </div>
       </header>
-      <div ref={scroller} className="flex-1 overflow-y-auto p-6">
+      <div ref={scroller} className="flex-1 overflow-y-auto page-pad">
         {loading ? (
           <div className="py-20 text-center"><Spinner label="جارٍ التحميل…" /></div>
         ) : items.length === 0 ? (

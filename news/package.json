@@ -16,21 +16,32 @@
     "build": "npm run build:main && npm run build:renderer",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "smoke": "node scripts/smoke.mjs",
+    "android:sync": "npm run build:renderer && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "android:apk:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
     "dist:dir": "npm run build && electron-builder --win --x64 --dir --publish never",
     "dist:win:zip": "npm run build && electron-builder --win zip --x64 --publish never"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/browser": "^7.0.5",
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/filesystem": "^7.1.8",
     "@mozilla/readability": "^0.6.0",
     "fast-xml-parser": "^5.11.1",
-    "linkedom": "^0.18.13"
+    "linkedom": "^0.18.13",
+    "sql.js": "^1.14.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
     "@tailwindcss/vite": "^4.1.11",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^38.0.0",
     "electron-builder": "^26.0.12",

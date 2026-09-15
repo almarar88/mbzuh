@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">نبض التقنية</string>
+    <string name="title_activity_main">نبض التقنية</string>
+    <string name="package_name">com.alcode.techpulse</string>
+    <string name="custom_url_scheme">com.alcode.techpulse</string>
+</resources>

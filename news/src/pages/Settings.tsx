@@ -40,7 +40,7 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 py-5 flex flex-col gap-5">
+      <div className="max-w-3xl mx-auto page-pad flex flex-col gap-5">
         <div>
           <h1 className="text-xl font-bold">الإعدادات</h1>
           <div className="text-xs" style={{ color: "var(--muted)" }}>كل الإعدادات محلية على جهازك. المفاتيح تُستخدم فقط للاتصال بالخدمة المعنية.</div>
@@ -58,7 +58,7 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
               احصل عليه من <a className="underline cursor-pointer" onClick={() => void api.feed.openExternal("https://console.anthropic.com/settings/keys")}>console.anthropic.com</a>. بلا مفتاح: التطبيق يجلب ويترجم (Google) ويلخّص محليًا، لكن الوكيل والتحليل العميق يتوقفان.
             </div>
           </div>
-          <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <div className="two-col">
             <div>
               <label className="label">النموذج</label>
               <select className="select" value={s.model} onChange={(e) => patch({ model: e.target.value })}>
@@ -94,7 +94,7 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
 
         <section className="panel p-5 flex flex-col gap-4">
           <div className="font-bold">📡 الجلب والتحديث</div>
-          <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <div className="two-col">
             <div>
               <label className="label">التحديث التلقائي كل (دقائق)</label>
               <input className="input" type="number" min={5} max={720} value={s.refreshMinutes} onChange={(e) => patch({ refreshMinutes: Number(e.target.value) })} />

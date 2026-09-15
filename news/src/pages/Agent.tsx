@@ -44,6 +44,7 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
   const [live, setLive] = useState<LiveState | null>(null);
   const [status, setStatus] = useState<LlmStatus | null>(null);
   const [openCall, setOpenCall] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const activeRef = useRef<number | null>(null);
   const { toast } = useToast();
@@ -99,6 +100,7 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
 
   async function open(id: number): Promise<void> {
     setActive(id);
+    setListOpen(false);
     setLive(null);
     setMessages(await api.agent.messages(id));
     if (await api.agent.running(id)) setLive({ text: "", calls: [], status: "يعمل…" });
@@ -179,9 +181,12 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
   }
 
   return (
-    <div className="h-full flex">
-      <div className="w-64 shrink-0 flex flex-col p-3 gap-2" style={{ borderInlineEnd: "1px solid var(--border)" }}>
-        <button className="btn btn-primary justify-center" onClick={() => { setActive(null); setMessages([]); setLive(null); }}>＋ محادثة جديدة</button>
+    <div className="agent-layout">
+      <div className={`conv-list ${listOpen ? "open" : ""}`}>
+        <div className="flex gap-2">
+          <button className="btn btn-primary justify-center flex-1" onClick={() => { setActive(null); setMessages([]); setLive(null); setListOpen(false); }}>＋ محادثة جديدة</button>
+          <button className="btn hide-wide" onClick={() => setListOpen(false)}>✕</button>
+        </div>
         <div className="flex-1 overflow-y-auto flex flex-col gap-1 mt-1">
           {convs.map((c) => (
             <div key={c.id} className={`nav-item group ${active === c.id ? "active" : ""}`} onClick={() => void open(c.id)}>
@@ -199,7 +204,11 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="hide-wide flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid var(--border)" }}>
+          <button className="btn btn-sm" onClick={() => setListOpen(true)}>☰ المحادثات ({convs.length})</button>
+          <span className="text-[11px] ms-auto" style={{ color: "var(--muted)" }}>{status?.configured ? status.model : "بلا مفتاح API"}</span>
+        </div>
+        <div className="flex-1 overflow-y-auto page-pad">
           {messages.length === 0 && !live ? (
             <div className="max-w-2xl mx-auto mt-10">
               <Empty icon="✨" title="الوكيل الذكي لأخبار التقنية" hint="يبحث في أخبار التطبيق وعلى الويب وReddit وX، يقرأ المقالات، يترجم، ويحلّل — ويجيبك بالعربية مع المصادر." />
@@ -208,7 +217,7 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
                   لتفعيل الوكيل أضِف مفتاح Anthropic API من <a className="underline cursor-pointer" onClick={onGoSettings}>الإعدادات</a>. باقي التطبيق يعمل بدونه.
                 </div>
               )}
-              <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <div className="two-col">
                 {SUGGESTIONS.map((s) => (
                   <button key={s} className="btn text-start justify-start" onClick={() => void send(s)}>{s}</button>
                 ))}
@@ -237,7 +246,7 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
             </div>
           )}
         </div>
-        <div className="p-4" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="p-3" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="max-w-3xl mx-auto flex gap-2 items-end">
             <textarea
               className="textarea"

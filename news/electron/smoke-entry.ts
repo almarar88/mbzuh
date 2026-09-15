@@ -1,13 +1,15 @@
-import { configureDbPath, getDb } from "./db";
-import { aggregator } from "./services/aggregator";
-import { feedStats, listArticles, listSources } from "./services/articles";
-import { searchNews, searchWeb } from "./services/search";
-import { seedSources } from "./services/sources";
-import { translateToArabic } from "./services/translate";
+import { parseHTML } from "linkedom";
+import { setPlatform } from "../core/platform";
+import { openNodeDb } from "./db/sqlite-node";
+import { aggregator } from "../core/services/aggregator";
+import { feedStats, listArticles, listSources } from "../core/services/articles";
+import { searchNews, searchWeb } from "../core/services/search";
+import { seedSources } from "../core/services/sources";
+import { translateToArabic } from "../core/services/translate";
 
 export async function run(dbPath: string): Promise<void> {
-  configureDbPath(dbPath);
-  getDb();
+  setPlatform({ name: "electron", parseHtml: (html) => parseHTML(html).document as unknown as Document, env: (n) => process.env[n] });
+  openNodeDb(dbPath);
   seedSources();
   console.log("sources:", listSources().length);
   const t0 = Date.now();

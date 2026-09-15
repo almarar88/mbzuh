@@ -16,7 +16,8 @@ declare global {
 const bridge = (): Bridge => window.techpulse;
 const call = <T>(channel: string, ...args: unknown[]): Promise<T> => bridge().invoke(channel, ...args) as Promise<T>;
 
-export const api = {
+/** تنفيذ IPC لـ Electron. أندرويد/الويب يستبدلانه بتنفيذ محلي عبر initApi. */
+const ipcApi = {
   feed: {
     list: (q: FeedQuery) => call<Article[]>("feed:list", q),
     get: (id: number) => call<Article | null>("feed:get", id),
@@ -59,3 +60,17 @@ export const api = {
     openArticle: (fn: (id: number) => void) => bridge().on("app:open-article", (id) => fn(Number(id))),
   },
 };
+
+export type Api = typeof ipcApi;
+
+/** الواجهة الفعلية المستخدمة في المكوّنات؛ تُملأ في initApi قبل أول تصيير. */
+export const api: Api = { ...ipcApi };
+
+export const isElectron = (): boolean => typeof window !== "undefined" && Boolean(window.techpulse);
+
+export async function initApi(): Promise<void> {
+  if (isElectron()) return;
+  const { createLocalApi } = await import("@/platform/local-api");
+  const local = await createLocalApi();
+  Object.assign(api, local);
+}

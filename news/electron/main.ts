@@ -2,14 +2,17 @@
 import path from "node:path";
 import { BrowserWindow, Menu, app, dialog, ipcMain, net, shell } from "electron";
 import type { RefreshProgress, Settings } from "@shared/types";
-import { closeDb, configureDbPath, getDb } from "./db";
+import { parseHTML } from "linkedom";
+import { getDb } from "../core/db";
+import { setPlatform } from "../core/platform";
+import { closeNodeDb, openNodeDb } from "./db/sqlite-node";
 import { registerAgentIpc } from "./ipc/agent";
 import { registerNewsIpc } from "./ipc/news";
 import { registerSettingsIpc } from "./ipc/settings";
-import { aggregator } from "./services/aggregator";
-import { setFetchImpl } from "./services/http";
-import { loadSettings } from "./services/settings";
-import { seedSources } from "./services/sources";
+import { aggregator } from "../core/services/aggregator";
+import { setFetchImpl } from "../core/services/http";
+import { loadSettings } from "../core/services/settings";
+import { seedSources } from "../core/services/sources";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 let mainWindow: BrowserWindow | null = null;
@@ -168,11 +171,15 @@ if (!app.requestSingleInstanceLock()) {
     app.setAppUserModelId("com.alcode.techpulse");
     // شبكة Chromium بدل fetch الخاص بـ Node: تمرّ عبر وكيل النظام وتُقبل من المواقع التي تحجب العملاء غير المتصفحية.
     setFetchImpl((input, init) => net.fetch(input, { ...init, bypassCustomProtocolHandlers: true }));
-    configureDbPath(path.join(app.getPath("userData"), "techpulse.db"));
-    getDb();
+    setPlatform({
+      name: "electron",
+      parseHtml: (html) => parseHTML(html).document as unknown as Document,
+      env: (name) => process.env[name],
+    });
+    openNodeDb(path.join(app.getPath("userData"), "techpulse.db"));
     seedSources();
 
-    aggregator.on("progress", (p: RefreshProgress) => send("app:refresh-progress", p));
+    aggregator.onProgress((p: RefreshProgress) => send("app:refresh-progress", p));
 
     registerNewsIpc(ipcMain);
     registerAgentIpc(ipcMain, () => mainWindow?.webContents ?? null);
@@ -196,6 +203,6 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     if (refreshTimer) clearInterval(refreshTimer);
-    closeDb();
+    closeNodeDb();
   });
 }

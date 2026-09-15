@@ -74,13 +74,13 @@ export function SourcesPage({ onRefreshed }: { onRefreshed: () => void }) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-6 py-5">
+      <div className="max-w-5xl mx-auto page-pad">
         <h1 className="text-xl font-bold mb-1">المصادر</h1>
         <div className="text-xs mb-5" style={{ color: "var(--muted)" }}>الأخبار تُجلب مباشرة من هذه المصادر. المصادر غير التقنية (مثل أخبار Google العامة) تُفلتر آليًا لتبقى الأخبار التقنية فقط.</div>
 
         <div className="panel p-4 mb-6">
           <div className="font-semibold mb-3">＋ إضافة مصدر</div>
-          <div className="grid gap-3" style={{ gridTemplateColumns: "150px 1fr 1fr 110px" }}>
+          <div className="sources-form">
             <div>
               <label className="label">النوع</label>
               <select className="select" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as SourceKind })}>
@@ -103,7 +103,7 @@ export function SourcesPage({ onRefreshed }: { onRefreshed: () => void }) {
               </select>
             </div>
           </div>
-          <div className="flex items-center gap-4 mt-3">
+          <div className="flex items-center gap-4 mt-3 flex-wrap">
             <Toggle on={form.techOnly} onChange={(v) => setForm({ ...form, techOnly: v })} label="مصدر تقني بالكامل (لا يُفلتر)" />
             <button className="btn btn-primary ms-auto" onClick={() => void add()}>إضافة واختبار</button>
           </div>

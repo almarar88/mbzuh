@@ -13,7 +13,7 @@
     "noEmit": true,
     "types": ["node"],
     "baseUrl": ".",
-    "paths": { "@shared/*": ["shared/*"] }
+    "paths": { "@shared/*": ["shared/*"], "@core/*": ["core/*"] }
   },
-  "include": ["electron", "shared", "scripts", "vite.config.ts"]
+  "include": ["electron", "shared", "core", "scripts", "vite.config.ts"]
 }

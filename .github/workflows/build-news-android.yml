@@ -1,0 +1,90 @@
+name: بناء نبض التقنية لأندرويد (APK)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "وسم الإصدار الذي سيُنشر (مثال news-v1.0.0)"
+        required: true
+        default: "news-v1.0.0"
+  push:
+    tags:
+      - "news-v*"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: news
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: news/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: تثبيت الاعتماديات
+        run: npm ci
+
+      - name: فحص الأنواع
+        run: npm run typecheck
+
+      - name: بناء الواجهة ومزامنة Capacitor
+        run: npm run build:renderer && npx cap sync android
+
+      - name: مفتاح التوقيع من الأسرار (إن وُجد)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+
+      - name: بناء APK
+        run: cd android && chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+
+      - name: تسمية الملف
+        run: cp android/app/build/outputs/apk/release/app-release.apk "TechPulse-${{ github.event.inputs.tag || github.ref_name }}.apk"
+
+      - name: رفع APK كمُخرَج
+        uses: actions/upload-artifact@v4
+        with:
+          name: TechPulse-Android-APK
+          path: news/TechPulse-*.apk
+          if-no-files-found: error
+
+      - name: نشر الإصدار
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: نبض التقنية ${{ github.event.inputs.tag || github.ref_name }}
+          files: news/TechPulse-*.apk
+          body: |
+            ## نبض التقنية — تطبيق أندرويد (APK)
+
+            نزّل ملف `TechPulse-*.apk` وافتحه على هاتفك (فعّل «تثبيت من مصادر غير معروفة» عند الطلب).
+            يدعم الهواتف القابلة للطي: شريط سفلي عند الطي، وشريط جانبي وأعمدة متعددة عند الفتح.
+
+            يجلب الأخبار مباشرة من الإنترنت (مواقع، Reddit، X، أخبار Google)، يترجمها إلى العربية،
+            ويحلّلها بوكيل ذكاء اصطناعي (يحتاج مفتاح Anthropic API من الإعدادات).
+
+            ---
+            تطوير **Alcode**

@@ -94,9 +94,9 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
   return (
     <div className="h-full overflow-y-auto">
       <Lightbox src={lightbox} onClose={() => setLightbox(null)} />
-      <div className="max-w-5xl mx-auto px-6 py-5">
+      <div className="max-w-5xl mx-auto page-pad">
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <button className="btn btn-ghost" onClick={onBack}>→ رجوع</button>
+          <button className="btn btn-ghost hide-narrow" onClick={onBack}>→ رجوع</button>
           <span className="ms-auto" />
           {!isAr && (
             <div className="flex gap-1">
@@ -136,7 +136,7 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
           {a.sourceKind === "x" && <span>· ♥ {num(a.score)} · 🔁 {num(extra.retweets ?? 0)}</span>}
         </div>
 
-        <h1 className="text-2xl md:text-3xl font-bold leading-snug mb-2" dir="auto">{title}</h1>
+        <h1 className="article-title text-2xl md:text-3xl font-bold leading-snug mb-2" dir="auto">{title}</h1>
         {!isAr && view === "ar" && a.titleAr && a.titleAr !== a.title && (
           <div className="text-sm mb-3" dir="ltr" style={{ color: "var(--muted)", textAlign: "left" }}>{a.title}</div>
         )}
@@ -147,10 +147,10 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
         )}
 
         {hero && (
-          <img src={hero} alt="" className="w-full rounded-2xl mb-5 cursor-zoom-in" style={{ maxHeight: 480, objectFit: "cover", border: "1px solid var(--border)" }} referrerPolicy="no-referrer" onClick={() => setLightbox(hero)} onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+          <img src={hero} alt="" className="hero-img w-full rounded-2xl mb-5 cursor-zoom-in" style={{ objectFit: "cover", border: "1px solid var(--border)" }} referrerPolicy="no-referrer" onClick={() => setLightbox(hero)} onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
         )}
 
-        <div className="grid gap-5" style={{ gridTemplateColumns: "minmax(0, 1fr) 300px" }}>
+        <div className="article-grid">
           <div className="min-w-0">
             {summary && !html && (
               <p className="prose mb-4" dir="auto" style={{ color: "var(--ink-2)" }}>{summary}</p>

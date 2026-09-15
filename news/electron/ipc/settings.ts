@@ -1,6 +1,6 @@
 import type { IpcMain } from "electron";
 import type { Settings } from "@shared/types";
-import { loadSettings, saveSettings } from "../services/settings";
+import { loadSettings, saveSettings } from "../../core/services/settings";
 
 export function registerSettingsIpc(ipc: IpcMain, onChange: (s: Settings) => void): void {
   ipc.handle("settings:get", () => loadSettings());

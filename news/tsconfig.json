@@ -16,7 +16,7 @@
     "noEmit": true,
     "types": ["vite/client"],
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"], "@shared/*": ["shared/*"] }
+    "paths": { "@/*": ["src/*"], "@shared/*": ["shared/*"], "@core/*": ["core/*"] }
   },
-  "include": ["src", "shared"]
+  "include": ["src", "shared", "core"]
 }

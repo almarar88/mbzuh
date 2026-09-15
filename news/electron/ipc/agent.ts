@@ -1,8 +1,8 @@
 import type { IpcMain, WebContents } from "electron";
 import type { AgentEvent } from "@shared/types";
-import { createConversation, deleteConversation, isAgentRunning, listConversations, listMessages, runAgent, stopAgent } from "../services/agent";
-import { llmStatus } from "../services/llm";
-import { truncate } from "../services/text";
+import { createConversation, deleteConversation, isAgentRunning, listConversations, listMessages, runAgent, stopAgent } from "../../core/services/agent";
+import { llmStatus } from "../../core/services/llm";
+import { truncate } from "../../core/services/text";
 
 export function registerAgentIpc(ipc: IpcMain, getWeb: () => WebContents | null): void {
   const emit = (e: AgentEvent): void => {
