@@ -5,7 +5,7 @@ import type { Analysis, Article } from "@shared/types";
 import { nowIso } from "../db";
 import { classify } from "./classify";
 import { complete, getClient } from "./llm";
-import { isArabic } from "./text";
+import { isArabic, stripHtml } from "./text";
 
 const STOP = new Set(
   "the a an and or of to in on for with by from at as is are was were be been this that these those it its into than then their they them he she we you our your his her not no but if so do does did has have had will would can could should may might about over under after before more most less least very also just new said says according".split(" ")
@@ -13,7 +13,7 @@ const STOP = new Set(
 );
 
 export function localAnalysis(article: Article): Analysis {
-  const text = (article.contentAr || article.contentText || article.summaryAr || article.summary || "").replace(/\s+/g, " ").trim();
+  const text = stripHtml(article.contentAr || "").replace(/\s+/g, " ").trim() || (article.contentText || article.summaryAr || article.summary || "").replace(/\s+/g, " ").trim();
   const title = article.titleAr || article.title;
   const sentences = text.split(/(?<=[.!?؟])\s+/).filter((s) => s.length > 30 && s.length < 500);
   const freq = new Map<string, number>();

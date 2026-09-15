@@ -5,7 +5,7 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import { fetchText } from "./http";
-import { absolutize, decodeEntities, stripHtml, toIso } from "./text";
+import { absolutize, cleanText, decodeEntities, stripHtml, toIso } from "./text";
 
 export interface PageExtract {
   url: string;
@@ -238,6 +238,8 @@ export function extractFromHtml(html: string, finalUrl: string): PageExtract {
     }
   }
   const { html: contentHtml, images } = sanitizeHtml(rawHtml, finalUrl);
+  // النص يُشتق من HTML المعقَّم كي تكون الفقرات نظيفة (Readability يترك فراغات وأسطرًا كثيرة)
+  contentText = cleanText(stripHtml(contentHtml) || contentText);
   const absOg = ogImage ? absolutize(ogImage, finalUrl) : ldImg ? absolutize(ldImg, finalUrl) : null;
   const allImages = absOg && !images.includes(absOg) ? [absOg, ...images] : images;
   return {
@@ -247,7 +249,7 @@ export function extractFromHtml(html: string, finalUrl: string): PageExtract {
     siteName: article?.siteName || siteName || null,
     excerpt: (article?.excerpt || description || "").trim(),
     contentHtml,
-    contentText: contentText.replace(/\n{3,}/g, "\n\n").trim(),
+    contentText,
     imageUrl: absOg ?? images[0] ?? null,
     images: allImages.slice(0, 12),
     publishedAt: published || ldDate ? toIso(published ?? ldDate) : null,

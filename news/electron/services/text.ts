@@ -126,3 +126,14 @@ export function chunkText(text: string, max: number): string[] {
   if (buf.trim()) out.push(buf.trim());
   return out;
 }
+
+/** يطبّع نصًا مستخلصًا من HTML: يقصّ كل سطر، يزيل الأسطر الفارغة الزائدة، ويوحّد فواصل الفقرات. */
+export function cleanText(t: string): string {
+  return (t || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((l) => l.replace(/[ \t\f\v\u00a0]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
