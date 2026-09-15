@@ -294,3 +294,108 @@ export interface BackupInfo {
   size: number;
   created_at: string;
 }
+
+/* ------------------------------ المهام ------------------------------ */
+
+export type TaskStatus = "todo" | "doing" | "done";
+export type TaskPriority = "low" | "normal" | "high" | "urgent";
+
+export interface Task {
+  id: number;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date: string | null;
+  tags: string | null;
+  source: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface TaskStats {
+  todo: number;
+  doing: number;
+  done: number;
+  overdue: number;
+  dueToday: number;
+}
+
+/* ------------------------- المساعد الذكي ------------------------- */
+
+export const AI_MODELS = [
+  { id: "claude-opus-5", label: "Claude Opus 5 — الافتراضي (أعلى جودة)" },
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5 — متوازن وأسرع" },
+  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — الأسرع والأوفر" },
+  { id: "claude-fable-5-1", label: "Claude Fable 5.1 — الأقوى (تكلفة أعلى)" },
+] as const;
+
+export type AiEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
+export interface AiSettings {
+  hasKey: boolean;
+  keyHint: string;
+  model: string;
+  effort: AiEffort;
+  adminName: string;
+  adminTitle: string;
+  encrypted: boolean;
+}
+
+/** الحدث المبثوث من العملية الرئيسية أثناء توليد رد. */
+export type AiStreamEvent =
+  | { jobId: string; type: "text"; text: string }
+  | { jobId: string; type: "tool"; name: string; label: string; phase: "start" | "end"; ok?: boolean }
+  | { jobId: string; type: "done"; text: string; usage?: { input: number; output: number } }
+  | { jobId: string; type: "error"; message: string }
+  | { jobId: string; type: "refusal"; message: string };
+
+export type AiTemplateId =
+  | "letter"
+  | "email"
+  | "summary"
+  | "translate"
+  | "proofread"
+  | "minutes"
+  | "weekly_plan"
+  | "report_narrative"
+  | "announcement";
+
+export interface AiTemplateInput {
+  template: AiTemplateId;
+  text: string;
+  options?: Record<string, string>;
+}
+
+export interface AiChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  tools?: { name: string; label: string; ok?: boolean }[];
+  at: string;
+  error?: string;
+}
+
+export interface ExtractedTask {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  due_date: string | null;
+  tags: string[];
+}
+
+/* ------------------------------ UMS ------------------------------ */
+
+export interface UmsState {
+  url: string;
+  title: string;
+  loading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  error: string | null;
+  zoom: number;
+  theme: "modern" | "original";
+  dark: boolean;
+}

@@ -209,6 +209,32 @@ CREATE TABLE IF NOT EXISTS activity_log (
   action TEXT NOT NULL,
   detail TEXT
 );
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'todo',
+  priority TEXT NOT NULL DEFAULT 'normal',
+  due_date TEXT,
+  tags TEXT,
+  source TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status, position);
+CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date);
+
+CREATE TABLE IF NOT EXISTS ai_chats (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  messages TEXT NOT NULL DEFAULT '[]',
+  transcript TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;

@@ -100,7 +100,7 @@ export function renderReportHtml(report: AcademicReport, orgName: string): strin
         : " لم يُرصد أي حقل مالي في هذا التقرير."
     }</div>
     <div style="margin-top:6px;text-align:center;color:#8a97a3">
-      أُعِدّ بواسطة نظام الدينامو — تطوير Alcode
+      أُعِدّ بواسطة منصّة الإداري — جامعة محمد بن زايد للعلوم الإنسانية · تطوير Alcode
     </div>
   </footer>
 </body></html>`;

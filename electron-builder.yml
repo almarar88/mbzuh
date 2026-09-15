@@ -1,6 +1,6 @@
-appId: com.alcode.dynamo
-productName: Dynamo
-copyright: © Alcode — الدينامو، نظام الإدارة الأكاديمية الشامل
+appId: com.alcode.mbzuh-admin
+productName: MBZUH Admin
+copyright: © Alcode — منصّة الإداري، جامعة محمد بن زايد للعلوم الإنسانية
 directories:
   output: release
   buildResources: build
@@ -14,10 +14,10 @@ win:
   target:
     - target: nsis
       arch: [x64]
-  artifactName: Dynamo-${version}-win-${arch}.${ext}
-  executableName: Dynamo
+  artifactName: MBZUH-Admin-${version}-win-${arch}.${ext}
+  executableName: MBZUH-Admin
 nsis:
-  artifactName: Dynamo-Setup-${version}.${ext}
+  artifactName: MBZUH-Admin-Setup-${version}.${ext}
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
   installerHeaderIcon: build/icon.ico
@@ -26,7 +26,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: الدينامو
+  shortcutName: منصّة الإداري — MBZUH
   installerLanguages: [ar_SA, en_US]
   language: 1025
   deleteAppDataOnUninstall: false

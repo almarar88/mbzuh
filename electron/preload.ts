@@ -6,7 +6,7 @@ const ALLOWED_PREFIXES = [
   "partners:", "partnerDocs:", "bookings:", "files:",
   "students:", "enrollments:", "attendance:", "import:", "reports:",
   "minutes:", "dashboard:", "search:", "activity:", "settings:", "system:",
-  "backup:", "demo:",
+  "backup:", "demo:", "tasks:", "ai:", "ums:",
 ];
 
 function assertAllowed(channel: string): void {

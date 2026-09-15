@@ -9,7 +9,9 @@ const common = {
   platform: "node",
   target: "node20",
   sourcemap: true,
-  external: ["electron", "exceljs"],
+  external: ["electron", "exceljs", "@anthropic-ai/sdk"],
+  // خطوط Tajawal تُضمَّن كـdata URL لتُحقن داخل صفحات UMS (لا يمكنها تحميل ملفاتنا المحلية).
+  loader: { ".woff2": "dataurl" },
   logLevel: "info",
 };
 

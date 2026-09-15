@@ -5,7 +5,7 @@ import os from "node:os";
 import { BrowserWindow } from "electron";
 
 export async function htmlToPdf(html: string, targetPath: string): Promise<string> {
-  const tmp = path.join(os.tmpdir(), `dynamo-report-${Date.now()}.html`);
+  const tmp = path.join(os.tmpdir(), `mbzuh-report-${Date.now()}.html`);
   fs.writeFileSync(tmp, html, "utf8");
   const win = new BrowserWindow({
     show: false,

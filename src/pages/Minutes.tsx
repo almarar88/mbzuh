@@ -14,10 +14,26 @@ import {
   Toolbar,
   useUi,
 } from "../components/ui";
+import { Icon } from "../components/icons";
 import { formatDate, todayISO } from "@shared/text";
 import type { MeetingMinute, Trainer } from "@shared/types";
+import type { PageId } from "../App";
 
 type Draft = Partial<MeetingMinute> & { trainer_ids: number[] };
+
+function minuteToText(m: MeetingMinute): string {
+  return [
+    `محضر: ${m.title} — ${formatDate(m.meeting_date)}${m.location ? ` — ${m.location}` : ""}`,
+    m.parties && `الأطراف: ${m.parties}`,
+    m.attendees && `الحضور: ${m.attendees}`,
+    m.agenda && `جدول الأعمال:\n${m.agenda}`,
+    m.decisions && `النقاط المتفق عليها:\n${m.decisions}`,
+    m.curriculum_notes && `ملاحظات تصميم المنهج:\n${m.curriculum_notes}`,
+    m.follow_up && `المتابعة:\n${m.follow_up}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 const emptyDraft = (): Draft => ({
   meeting_date: todayISO(),
@@ -33,8 +49,36 @@ const emptyDraft = (): Draft => ({
   trainer_ids: [],
 });
 
-export default function MinutesPage({ focusId, trainerId }: { focusId?: number; trainerId?: number }) {
+export default function MinutesPage({
+  focusId,
+  trainerId,
+  onNavigate,
+}: {
+  focusId?: number;
+  trainerId?: number;
+  onNavigate?: (page: PageId, id?: number, q?: string) => void;
+}) {
   const { toast, confirm } = useUi();
+  const [extracting, setExtracting] = useState(false);
+
+  const extractTasks = async (m: MeetingMinute) => {
+    setExtracting(true);
+    const res = await api.ai.extractTasks(minuteToText(m), "text");
+    setExtracting(false);
+    if (!res.ok) return toast(res.message ?? "تعذّر الاستخراج", "danger");
+    if (res.tasks.length === 0) return toast("لم يُعثر على مهام في هذا المحضر");
+    await api.tasks.bulkCreate(
+      res.tasks.map((t) => ({
+        title: t.title,
+        description: t.description,
+        priority: t.priority,
+        due_date: t.due_date,
+        tags: [...t.tags, "محضر"].join("، "),
+        source: `minute:${m.id}`,
+      })),
+    );
+    toast(`أُضيفت ${res.tasks.length} مهمة من المحضر إلى لوحة المهام`, "ok");
+  };
   const [minutes, setMinutes] = useState<MeetingMinute[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [query, setQuery] = useState("");
@@ -196,7 +240,21 @@ export default function MinutesPage({ focusId, trainerId }: { focusId?: number; 
                     {formatDate(selected.meeting_date)} · {selected.location || "بدون مكان محدد"}
                   </p>
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                  <Button size="sm" onClick={() => void extractTasks(selected)} disabled={extracting} title="يستخرج المهام والإجراءات إلى لوحة المهام بالذكاء الاصطناعي">
+                    <Icon name="wand" size={13} /> {extracting ? "جارٍ الاستخراج…" : "استخراج المهام"}
+                  </Button>
+                  {onNavigate && (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        onNavigate("assistant", undefined, `لخّص هذا المحضر واستخرج القرارات وما عليّ متابعته:\n\n${minuteToText(selected)}`)
+                      }
+                      title="فتح المساعد الذكي مع نص المحضر"
+                    >
+                      <Icon name="sparkles" size={13} /> تلخيص
+                    </Button>
+                  )}
                   <Button size="sm" onClick={attach}>
                     + مرفق
                   </Button>

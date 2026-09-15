@@ -1,6 +1,8 @@
 /** غلاف مُنمَّط حول جسر IPC المكشوف من العملية الرئيسية. */
 import type {
   AcademicReport,
+  AiSettings,
+  AiTemplateInput,
   AttendanceStatus,
   Availability,
   Booking,
@@ -8,6 +10,7 @@ import type {
   Course,
   CourseSession,
   DashboardStats,
+  ExtractedTask,
   ImportLog,
   ImportResult,
   MeetingMinute,
@@ -18,7 +21,11 @@ import type {
   Room,
   SearchHit,
   Student,
+  Task,
+  TaskStats,
+  TaskStatus,
   Trainer,
+  UmsState,
 } from "@shared/types";
 
 declare global {
@@ -240,5 +247,45 @@ export const api = {
   demo: {
     seed: () => call<{ ok: boolean; message: string }>("demo:seed"),
     reset: () => call<{ ok: boolean; message: string }>("demo:reset"),
+  },
+  tasks: {
+    list: () => call<{ tasks: Task[]; stats: TaskStats }>("tasks:list"),
+    create: (payload: Partial<Task> & { title: string }) => call<Task>("tasks:create", payload),
+    update: (id: number, patch: Partial<Task>) => call<Task | null>("tasks:update", id, patch),
+    reorder: (status: TaskStatus, ids: number[]) => call<boolean>("tasks:reorder", status, ids),
+    remove: (id: number) => call<boolean>("tasks:delete", id),
+    bulkCreate: (rows: (Partial<Task> & { title: string })[]) => call<Task[]>("tasks:bulkCreate", rows),
+  },
+  ai: {
+    settings: () => call<AiSettings>("ai:settings"),
+    setKey: (key: string) => call<AiSettings>("ai:setKey", key),
+    setPrefs: (prefs: { model?: string; effort?: string; adminName?: string; adminTitle?: string }) =>
+      call<AiSettings>("ai:setPrefs", prefs),
+    test: () => call<{ ok: boolean; message: string; model: string }>("ai:test"),
+    templates: () => call<Record<string, string>>("ai:templates"),
+    chat: (chatId: string, jobId: string, text: string) => call<string>("ai:chat", chatId, jobId, text),
+    template: (jobId: string, input: AiTemplateInput) => call<string>("ai:template", jobId, input),
+    cancel: (jobId: string) => call<boolean>("ai:cancel", jobId),
+    extractTasks: (text: string, mode: "goal" | "text") =>
+      call<{ ok: boolean; message?: string; tasks: ExtractedTask[] }>("ai:extractTasks", text, mode),
+    chats: () => call<{ id: string; title: string; created_at: string; updated_at: string }[]>("ai:chats"),
+    transcript: (chatId: string) => call<unknown[]>("ai:chatTranscript", chatId),
+    saveTranscript: (chatId: string, title: string, transcript: unknown[]) =>
+      call<boolean>("ai:saveTranscript", chatId, title, transcript),
+    deleteChat: (chatId: string) => call<boolean>("ai:deleteChat", chatId),
+    saveText: (suggested: string, text: string) => call<string | null>("ai:saveText", suggested, text),
+  },
+  ums: {
+    show: (bounds: { x: number; y: number; width: number; height: number }) => call<UmsState>("ums:show", bounds),
+    hide: () => call<boolean>("ums:hide"),
+    visible: (visible: boolean) => call<boolean>("ums:visible", visible),
+    state: () => call<UmsState>("ums:state"),
+    navigate: (action: "back" | "forward" | "reload" | "home" | "stop" | "url", url?: string) =>
+      call<UmsState>("ums:navigate", action, url),
+    zoom: (direction: "in" | "out" | "reset") => call<UmsState>("ums:zoom", direction),
+    theme: (theme: "modern" | "original", dark: boolean) => call<UmsState>("ums:theme", theme, dark),
+    setHome: (url: string) => call<UmsState>("ums:setHome", url),
+    openExternal: () => call<boolean>("ums:openExternal"),
+    clearSession: () => call<boolean>("ums:clearSession"),
   },
 };

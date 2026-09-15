@@ -188,7 +188,7 @@ export function registerWorkspaceIpc(ipcMain: IpcMain): void {
     dbPath: dbPath(),
     dataDir: app.getPath("userData"),
     backupsDir: backupsDir(),
-    orgName: getSetting("org_name", "الإدارة الأكاديمية"),
+    orgName: getSetting("org_name", "جامعة محمد بن زايد للعلوم الإنسانية"),
     electron: process.versions.electron,
     dbSize: fs.existsSync(dbPath()) ? fs.statSync(dbPath()).size : 0,
   }));
@@ -209,7 +209,7 @@ export function registerWorkspaceIpc(ipcMain: IpcMain): void {
 
   ipcMain.handle("backup:create", async () => {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const target = path.join(backupsDir(), `dynamo-${stamp}.db`);
+    const target = path.join(backupsDir(), `mbzuh-${stamp}.db`);
     const info = await backupTo(target);
     pruneBackups(20);
     logActivity("backup", null, "إنشاء نسخة احتياطية", path.basename(target));
@@ -219,8 +219,8 @@ export function registerWorkspaceIpc(ipcMain: IpcMain): void {
   ipcMain.handle("backup:export", async () => {
     const stamp = new Date().toISOString().slice(0, 10);
     const res = await dialog.showSaveDialog({
-      defaultPath: path.join(app.getPath("documents"), `dynamo-backup-${stamp}.db`),
-      filters: [{ name: "قاعدة بيانات الدينامو", extensions: ["db"] }],
+      defaultPath: path.join(app.getPath("documents"), `mbzuh-backup-${stamp}.db`),
+      filters: [{ name: "قاعدة بيانات منصّة الإداري", extensions: ["db"] }],
     });
     if (res.canceled || !res.filePath) return null;
     return backupTo(res.filePath);
@@ -231,7 +231,7 @@ export function registerWorkspaceIpc(ipcMain: IpcMain): void {
     if (!source) {
       const res = await dialog.showOpenDialog({
         properties: ["openFile"],
-        filters: [{ name: "قاعدة بيانات الدينامو", extensions: ["db"] }],
+        filters: [{ name: "قاعدة بيانات منصّة الإداري", extensions: ["db"] }],
       });
       if (res.canceled) return { ok: false, message: "أُلغيت العملية." };
       source = res.filePaths[0];

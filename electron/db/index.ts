@@ -93,7 +93,7 @@ export function backupsDir(): string {
 }
 
 export function dbPath(): string {
-  return path.join(dataDir(), "dynamo.db");
+  return path.join(dataDir(), "mbzuh.db");
 }
 
 export function getDb(): Db {
@@ -156,7 +156,7 @@ export async function backupTo(target: string): Promise<{ path: string; size: nu
 export async function autoBackup(): Promise<void> {
   try {
     const stamp = new Date().toISOString().slice(0, 10);
-    const target = path.join(backupsDir(), `dynamo-${stamp}.db`);
+    const target = path.join(backupsDir(), `mbzuh-${stamp}.db`);
     if (fs.existsSync(target)) return;
     await backupTo(target);
     pruneBackups(20);

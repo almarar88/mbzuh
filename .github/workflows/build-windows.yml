@@ -1,12 +1,12 @@
-name: بناء الدينامو لويندوز
+name: بناء منصّة الإداري (MBZUH Admin) لويندوز
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "وسم الإصدار الذي سيُنشر (مثال v1.0.0)"
+        description: "وسم الإصدار الذي سيُنشر (مثال v2.0.0)"
         required: true
-        default: "v1.0.0"
+        default: "v2.0.0"
   push:
     tags:
       - "v*"
@@ -38,22 +38,27 @@ jobs:
       - name: رفع ملف التثبيت كمُخرَج
         uses: actions/upload-artifact@v4
         with:
-          name: Dynamo-Setup-Windows
-          path: release/Dynamo-Setup-*.exe
+          name: MBZUH-Admin-Setup-Windows
+          path: release/MBZUH-Admin-Setup-*.exe
           if-no-files-found: error
 
       - name: نشر الإصدار
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          name: الدينامو ${{ github.event.inputs.tag || github.ref_name }}
-          files: release/Dynamo-Setup-*.exe
+          name: منصّة الإداري — MBZUH Admin ${{ github.event.inputs.tag || github.ref_name }}
+          files: release/MBZUH-Admin-Setup-*.exe
           body: |
-            ## الدينامو — نظام الإدارة الأكاديمية الشامل
+            ## منصّة الإداري — جامعة محمد بن زايد للعلوم الإنسانية
 
-            ملف تثبيت لويندوز (64-بت). نزّل `Dynamo-Setup-1.0.0.exe` وشغّله
-            واتبع خطوات التثبيت. التطبيق يعمل بقاعدة بيانات محلية على جهازك
-            بلا إنترنت وبلا خادم.
+            ملف تثبيت لويندوز (64-بت). نزّل `MBZUH-Admin-Setup-*.exe` وشغّله
+            واتبع خطوات التثبيت.
+
+            - لوحة **نظام الجامعة الموحّد (UMS)** مدمجة داخل التطبيق بمظهر حديث.
+            - **مساعد ذكاء اصطناعي** للمهام الإدارية (خطابات، بريد، تلخيص، ترجمة،
+              تدقيق، استخراج المهام من المحاضر) — يحتاج مفتاح Claude API من الإعدادات.
+            - **لوحة مهام** Kanban، إضافة إلى وحدات الدورات والمدربين والقاعات
+              والتقارير والمحاضر.
 
             > قد يُظهر ويندوز تنبيه SmartScreen لأن الملف غير موقّع رقميًا —
             > اختر «مزيد من المعلومات» ثم «تشغيل على أي حال».

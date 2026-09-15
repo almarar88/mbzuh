@@ -402,7 +402,7 @@ export function buildAcademicReport(opts: ReportOptions = {}): AcademicReport {
 
   const report: AcademicReport = {
     title: "التقرير الأكاديمي والإحصائي",
-    subtitle: "نظام الدينامو لإدارة الدورات والمدربين",
+    subtitle: "منصّة الإداري — إدارة الدورات والمدربين",
     generatedAt: new Date().toISOString(),
     period: { from: opts.from ?? null, to: opts.to ?? null },
     filters,

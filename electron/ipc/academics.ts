@@ -13,7 +13,7 @@ import type { AcademicReport, ReportOptions, Student } from "../../shared/types"
 
 async function reportToXlsx(report: AcademicReport, target: string): Promise<string> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "الدينامو";
+  wb.creator = "منصّة الإداري — MBZUH";
   wb.created = new Date();
 
   const summary = wb.addWorksheet("المؤشرات", { views: [{ rightToLeft: true }] });
