@@ -1,5 +1,6 @@
 /** مستودع المقالات والمصادر (استعلامات SQLite). */
-import type { Analysis, Article, FeedQuery, FeedStats, Source } from "@shared/types";
+import type { Analysis, AnalyticsData, Article, FeedQuery, FeedStats, Source, SourceKind, Trend } from "@shared/types";
+import { loadSettings } from "./settings";
 import { getDb, nowIso } from "../db";
 
 function parseJson<T>(s: unknown, fallback: T): T {
@@ -67,9 +68,37 @@ export function rowToSource(r: any): Source {
 const SELECT = `SELECT a.*, s.name AS source_name, s.kind AS source_kind FROM articles a JOIN sources s ON s.id = a.source_id`;
 const LIST_COLUMNS = `a.id, a.source_id, a.url, a.hash, a.title, a.title_ar, a.summary, a.summary_ar, a.lang, a.category, a.tags, a.image_url, a.images, a.author, a.published_at, a.fetched_at, a.score, a.comments, a.extra, a.translated, a.read, a.saved, a.details_fetched, a.details_error, s.name AS source_name, s.kind AS source_kind`;
 
+function keywordClause(words: string[], negate: boolean): { sql: string; params: unknown[] } | null {
+  const ws = words.map((w) => w.trim()).filter(Boolean).slice(0, 30);
+  if (!ws.length) return null;
+  const parts = ws.map(() => "(a.title LIKE ? OR a.title_ar LIKE ? OR a.summary LIKE ? OR a.summary_ar LIKE ? OR a.tags LIKE ?)");
+  const params = ws.flatMap((w) => Array(5).fill(`%${w}%`));
+  return { sql: `${negate ? "NOT " : ""}(${parts.join(" OR ")})`, params };
+}
+
 export function listArticles(q: FeedQuery): Article[] {
   const where: string[] = [];
   const params: unknown[] = [];
+  const settings = loadSettings();
+  const muted = keywordClause(settings.mutedKeywords, true);
+  if (muted && !q.savedOnly) {
+    where.push(muted.sql);
+    params.push(...muted.params);
+  }
+  if (q.interestsOnly) {
+    const inter = keywordClause(settings.interests, false);
+    if (inter) {
+      where.push(inter.sql);
+      params.push(...inter.params);
+    } else {
+      where.push("0");
+    }
+  }
+  if (q.arabicOnly) where.push("a.lang = 'ar'");
+  if (q.tag) {
+    where.push("a.tags LIKE ?");
+    params.push(`%${JSON.stringify(q.tag).slice(1, -1)}%`);
+  }
   if (q.category && q.category !== "all") {
     where.push("a.category = ?");
     params.push(q.category);
@@ -92,7 +121,13 @@ export function listArticles(q: FeedQuery): Article[] {
       params.push(like, like, like, like, like, like);
     }
   }
-  const sql = `SELECT ${LIST_COLUMNS} FROM articles a JOIN sources s ON s.id = a.source_id ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY a.published_at DESC LIMIT ? OFFSET ?`;
+  const order =
+    q.sort === "popular"
+      ? "a.score DESC, a.comments DESC, a.published_at DESC"
+      : q.sort === "trending"
+        ? "(a.score * 0.02 + a.comments * 0.05 + (CASE WHEN a.category = 'ai' THEN 1 ELSE 0 END) + (length(a.tags) / 40.0) - (julianday('now') - julianday(a.published_at)) * 2) DESC"
+        : "a.published_at DESC";
+  const sql = `SELECT ${LIST_COLUMNS} FROM articles a JOIN sources s ON s.id = a.source_id ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY ${order} LIMIT ? OFFSET ?`;
   params.push(Math.min(q.limit ?? 60, 300), q.offset ?? 0);
   return getDb().prepare(sql).all(...params).map(rowToArticle);
 }
@@ -235,4 +270,95 @@ export function deleteSource(id: number): void {
 
 export function markSourceFetched(id: number, error: string | null): void {
   getDb().prepare("UPDATE sources SET last_fetched_at = ?, last_error = ? WHERE id = ?").run(nowIso(), error, id);
+}
+
+export function markAllRead(category?: string): number {
+  if (category && category !== "all") return getDb().prepare("UPDATE articles SET read = 1 WHERE read = 0 AND category = ?").run(category).changes;
+  return getDb().prepare("UPDATE articles SET read = 1 WHERE read = 0").run().changes;
+}
+
+/** الوسوم الأكثر تكرارًا خلال آخر N ساعة. */
+export function trendingTags(hours = 48, limit = 10): Trend[] {
+  const since = new Date(Date.now() - hours * 3600000).toISOString();
+  const rows = getDb().prepare("SELECT tags FROM articles WHERE published_at >= ?").all(since) as { tags: string }[];
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    for (const t of parseJson<string[]>(r.tags, [])) {
+      if (t === "تقنية عامة" || t === "شركات التقنية" || t === "برمجيات وتطبيقات") continue;
+      counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+export function analytics(): AnalyticsData {
+  const db = getDb();
+  const days: AnalyticsData["days"] = [];
+  const dayNames = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - i);
+    const next = new Date(d.getTime() + 86400000);
+    const row = db
+      .prepare("SELECT COUNT(*) n, SUM(CASE WHEN category = 'ai' THEN 1 ELSE 0 END) ai FROM articles WHERE published_at >= ? AND published_at < ?")
+      .get(d.toISOString(), next.toISOString()) as { n: number; ai: number | null };
+    days.push({ date: d.toISOString().slice(0, 10), label: i === 0 ? "اليوم" : dayNames[d.getDay()], total: Number(row.n), ai: Number(row.ai ?? 0) });
+  }
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - 6);
+  const prevStart = new Date(weekStart.getTime() - 7 * 86400000);
+  const one = (sql: string, ...p: unknown[]): number => Number((db.prepare(sql).get(...p) as { n: number | null }).n ?? 0);
+  const weekTotal = one("SELECT COUNT(*) n FROM articles WHERE published_at >= ?", weekStart.toISOString());
+  const prevWeekTotal = one("SELECT COUNT(*) n FROM articles WHERE published_at >= ? AND published_at < ?", prevStart.toISOString(), weekStart.toISOString());
+  const aiWeek = one("SELECT COUNT(*) n FROM articles WHERE published_at >= ? AND category = 'ai'", weekStart.toISOString());
+  const topSources = (db
+    .prepare("SELECT s.name, s.kind, COUNT(*) count FROM articles a JOIN sources s ON s.id = a.source_id WHERE a.published_at >= ? GROUP BY s.id ORDER BY count DESC LIMIT 8")
+    .all(weekStart.toISOString()) as { name: string; kind: SourceKind; count: number }[]).map((r) => ({ name: r.name, kind: r.kind, count: Number(r.count) }));
+  const bySourceKind = (db
+    .prepare("SELECT s.kind, COUNT(*) count FROM articles a JOIN sources s ON s.id = a.source_id WHERE a.published_at >= ? GROUP BY s.kind ORDER BY count DESC")
+    .all(weekStart.toISOString()) as { kind: SourceKind; count: number }[]).map((r) => ({ kind: r.kind, count: Number(r.count) }));
+  return {
+    days,
+    weekTotal,
+    prevWeekTotal,
+    aiShare: weekTotal ? aiWeek / weekTotal : 0,
+    topSources,
+    topTags: trendingTags(7 * 24, 10),
+    readCount: one("SELECT COUNT(*) n FROM articles WHERE read = 1"),
+    savedCount: one("SELECT COUNT(*) n FROM articles WHERE saved = 1"),
+    translatedCount: one("SELECT COUNT(*) n FROM articles WHERE translated = 1 AND lang != 'ar'"),
+    bySourceKind,
+  };
+}
+
+/** يصدّر المحفوظات بصيغة Markdown. */
+export function exportSavedMarkdown(): string {
+  const items = listArticles({ savedOnly: true, limit: 300 });
+  const lines = [`# محفوظات نبض التقنية — ${new Date().toLocaleDateString("ar-SA")}`, ""];
+  for (const a of items) {
+    lines.push(`## ${a.titleAr || a.title}`);
+    if (a.titleAr && a.titleAr !== a.title) lines.push(`_${a.title}_`);
+    lines.push(`- المصدر: ${a.sourceName} · ${a.publishedAt.slice(0, 10)} · ${a.category === "ai" ? "AI" : "تقنية"}`);
+    lines.push(`- الرابط: ${a.url}`);
+    const sum = a.summaryAr || a.summary;
+    if (sum) lines.push("", sum);
+    if (a.analysis?.summary) lines.push("", `**التحليل:** ${a.analysis.summary}`);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+/** هل يطابق الخبر أحد الاهتمامات؟ */
+export function matchesInterests(a: { title: string; titleAr?: string | null; summary?: string | null; tags: string[] }, interests: string[]): string | null {
+  const hay = `${a.title} ${a.titleAr ?? ""} ${a.summary ?? ""} ${a.tags.join(" ")}`.toLowerCase();
+  for (const w of interests) {
+    const k = w.trim().toLowerCase();
+    if (k && hay.includes(k)) return w;
+  }
+  return null;
 }

@@ -2,11 +2,11 @@
  * محرّك التجميع: يجلب كل المصادر، يطبّع العناصر، يصنّفها، يزيل المكرر،
  * يخزّنها، ثم يجلب التفاصيل والصور ويترجم العناوين تلقائيًا.
  */
-import type { Analysis, Article, RefreshProgress, Source } from "@shared/types";
+import type { Analysis, Article, RefreshProgress, RefreshSummary, Source } from "@shared/types";
 import { nowIso } from "../db";
 import { analyzeArticle } from "./analyze";
 import {
-  findByHash, getArticle, insertArticle, listSources, markSourceFetched, pendingDetails, pendingTranslation,
+  findByHash, getArticle, insertArticle, listSources, markSourceFetched, matchesInterests, pendingDetails, pendingTranslation,
   pruneOld, titleExists, updateArticle, type NewArticle,
 } from "./articles";
 import { classify } from "./classify";
@@ -19,14 +19,6 @@ import { detectLang, firstImageFromHtml, normalizeTitle, normalizeUrl, sha1, str
 import { translateToArabic } from "./translate";
 import { extractPage, sanitizeHtml } from "./web";
 import { fetchXTimeline } from "./x";
-
-export interface RefreshSummary {
-  added: number;
-  sources: number;
-  errors: { source: string; error: string }[];
-  startedAt: string;
-  finishedAt: string;
-}
 
 type Candidate = Omit<NewArticle, "hash" | "category" | "tags" | "lang" | "translated" | "titleAr" | "summaryAr"> & { lang?: string };
 
@@ -61,6 +53,7 @@ export class Aggregator {
     const settings = loadSettings();
     const sources = listSources().filter((s) => s.enabled && (!sourceIds || sourceIds.includes(s.id)));
     const errors: RefreshSummary["errors"] = [];
+    const interestHits: RefreshSummary["interestHits"] = [];
     let added = 0;
     let done = 0;
     this.progress({ phase: "start", done: 0, total: sources.length, added: 0 });
@@ -79,7 +72,7 @@ export class Aggregator {
         try {
           await gate(source.kind);
           const candidates = await this.fetchSource(source, settings.xBearerToken);
-          const n = this.store(source, candidates, settings.maxArticleAgeDays);
+          const n = this.store(source, candidates, settings.maxArticleAgeDays, settings.interests, interestHits);
           added += n;
           markSourceFetched(source.id, null);
         } catch (e) {
@@ -99,7 +92,7 @@ export class Aggregator {
     }
     if (settings.autoTranslate) void this.translatePending();
     if (settings.autoFetchDetails) void this.fetchPendingDetails();
-    return { added, sources: sources.length, errors, startedAt, finishedAt: nowIso() };
+    return { added, sources: sources.length, errors, startedAt, finishedAt: nowIso(), interestHits: interestHits.slice(0, 10) };
   }
 
   async fetchSource(source: Source, xBearer: string): Promise<Candidate[]> {
@@ -193,7 +186,7 @@ export class Aggregator {
   }
 
   /** يصنّف ويزيل المكرر ويخزّن، ويعيد عدد المقالات الجديدة. */
-  private store(source: Source, candidates: Candidate[], maxAgeDays: number): number {
+  private store(source: Source, candidates: Candidate[], maxAgeDays: number, interests: string[] = [], hits: RefreshSummary["interestHits"] = []): number {
     const cutoff = Date.now() - maxAgeDays * 86400000;
     const dedupeSince = new Date(Date.now() - 3 * 86400000).toISOString();
     let added = 0;
@@ -219,7 +212,10 @@ export class Aggregator {
         translated: lang === "ar" ? 1 : 0,
         extra: { ...c.extra, nt },
       });
-      if (id) added += 1;
+      if (id) {
+        added += 1;
+        if (interests.length && matchesInterests({ title: c.title, summary: c.summary, tags: cls.tags }, interests)) hits.push({ id, title: c.title });
+      }
     }
     return added;
   }

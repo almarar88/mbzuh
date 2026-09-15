@@ -7,7 +7,8 @@ import type { AgentEvent, RefreshProgress, Settings } from "@shared/types";
 import { setPlatform } from "@core/platform";
 import { setFetchImpl } from "@core/services/http";
 import { aggregator } from "@core/services/aggregator";
-import { addSource, deleteSource, feedStats, getArticle, getSource, listArticles, listSources, updateArticle, updateSource } from "@core/services/articles";
+import { addSource, analytics, deleteSource, exportSavedMarkdown, feedStats, getArticle, getSource, listArticles, listSources, markAllRead, trendingTags, updateArticle, updateSource } from "@core/services/articles";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import { createConversation, deleteConversation, isAgentRunning, listConversations, listMessages, runAgent, stopAgent } from "@core/services/agent";
 import { llmStatus } from "@core/services/llm";
 import { loadSettings, saveSettings } from "@core/services/settings";
@@ -37,12 +38,50 @@ const commandEm = new Emitter<string>();
 const openArticleEm = new Emitter<number>();
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
+let appActive = true;
+let lastRefreshAt = 0;
+
+/** تنبيه محلي بالأخبار الجديدة عندما يكون التطبيق في الخلفية. */
+async function notifyNewArticles(summary: { added: number; interestHits: { id: number; title: string }[] }): Promise<void> {
+  if (!isNative || appActive || !loadSettings().notifyNew) return;
+  if (summary.added === 0) return;
+  try {
+    const perm = await LocalNotifications.checkPermissions();
+    if (perm.display !== "granted") {
+      const req = await LocalNotifications.requestPermissions();
+      if (req.display !== "granted") return;
+    }
+    const hit = summary.interestHits[0];
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: Math.floor(Date.now() / 1000) % 2147483647,
+          title: hit ? `خبر يهمّك: ${hit.title.slice(0, 60)}` : `نبض التقنية: ${summary.added} خبر جديد`,
+          body: hit ? `و${summary.added - 1} خبر آخر جديد` : "افتح التطبيق لقراءة أحدث أخبار التقنية وAI",
+          extra: hit ? { articleId: hit.id } : {},
+          smallIcon: "ic_launcher_foreground",
+        },
+      ],
+    });
+  } catch {
+    /* التنبيهات غير متاحة */
+  }
+}
+
+async function refreshAndNotify(): Promise<void> {
+  if (aggregator.refreshing) return;
+  try {
+    const s = await aggregator.refreshAll();
+    lastRefreshAt = Date.now();
+    void notifyNewArticles(s);
+  } catch {
+    /* تجاهل */
+  }
+}
 
 function scheduleRefresh(s: Settings): void {
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => {
-    if (!aggregator.refreshing) void aggregator.refreshAll().catch(() => undefined);
-  }, Math.max(5, s.refreshMinutes || 30) * 60 * 1000);
+  refreshTimer = setInterval(() => void refreshAndNotify(), Math.max(5, s.refreshMinutes || 30) * 60 * 1000);
 }
 
 export async function createLocalApi(): Promise<Api> {
@@ -57,14 +96,26 @@ export async function createLocalApi(): Promise<Api> {
   aggregator.onProgress((p) => progressEm.emit(p));
   scheduleRefresh(loadSettings());
   if (isNative) {
-    void CapApp.addListener("pause", () => void flushSqlJsDb());
+    void CapApp.addListener("pause", () => {
+      appActive = false;
+      void flushSqlJsDb();
+    });
+    void CapApp.addListener("resume", () => {
+      appActive = true;
+      // تحديث عند العودة إن مضى أكثر من 15 دقيقة
+      if (Date.now() - lastRefreshAt > 15 * 60 * 1000) void refreshAndNotify();
+    });
+    void LocalNotifications.addListener("localNotificationActionPerformed", (ev) => {
+      const id = Number((ev.notification.extra as { articleId?: number } | undefined)?.articleId);
+      if (id) openArticleEm.emit(id);
+    });
     void CapApp.addListener("backButton", ({ canGoBack }) => {
       commandEm.emit("back");
       if (!canGoBack) return;
     });
   }
   window.addEventListener("beforeunload", () => void flushSqlJsDb());
-  setTimeout(() => void aggregator.refreshAll().catch(() => undefined), 1500);
+  setTimeout(() => void refreshAndNotify(), 1500);
 
   return {
     feed: {
@@ -76,7 +127,15 @@ export async function createLocalApi(): Promise<Api> {
       details: (id, force) => aggregator.fetchDetails(id, force),
       translate: (id, includeContent) => aggregator.translateArticle(id, includeContent),
       analyze: (id, force) => aggregator.analyze(id, force),
-      refresh: (sourceIds) => aggregator.refreshAll(sourceIds),
+      refresh: async (sourceIds) => {
+        const s = await aggregator.refreshAll(sourceIds);
+        lastRefreshAt = Date.now();
+        return s;
+      },
+      trending: async () => trendingTags(48, 10),
+      analytics: async () => analytics(),
+      markAllRead: async (category) => markAllRead(category),
+      exportSaved: async () => exportSavedMarkdown(),
       related: async (id) => {
         const a = getArticle(id);
         if (!a) return [];

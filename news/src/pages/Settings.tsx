@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { Settings } from "@shared/types";
 import { api } from "@/lib/api";
 import { Spinner, Toggle, useToast } from "@/components/ui";
+import { TagInput } from "@/components/TagInput";
+import { api as apiShare, shareText } from "@/lib/api";
 
 const MODELS = [
   { id: "claude-opus-5", label: "Claude Opus 5 — الأقوى (افتراضي)" },
@@ -47,6 +49,50 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
         </div>
 
         <section className="panel p-5 flex flex-col gap-4">
+          <div className="font-bold">⭐ اهتماماتي</div>
+          <div>
+            <label className="label">كلمات أو جهات تهمّك — تُبرز في الخلاصة وتصلك تنبيهات عنها (اكتب ثم Enter)</label>
+            <TagInput value={s.interests} onChange={(v) => patch({ interests: v })} placeholder="مثل: Claude، Nvidia، روبوتات…" accent />
+          </div>
+          <div>
+            <label className="label">كلمات مكتومة — تُخفى الأخبار التي تحتويها</label>
+            <TagInput value={s.mutedKeywords} onChange={(v) => patch({ mutedKeywords: v })} placeholder="مثل: عملات رقمية، ألعاب…" />
+          </div>
+          <Toggle on={s.notifyNew} onChange={(v) => patch({ notifyNew: v })} label="تنبيه بالأخبار الجديدة عندما يكون التطبيق في الخلفية (أندرويد)" />
+        </section>
+
+        <section className="panel p-5 flex flex-col gap-4">
+          <div className="font-bold">📖 القراءة والعرض</div>
+          <div className="two-col">
+            <div>
+              <label className="label">حجم الخط</label>
+              <div className="flex gap-2">
+                {[{ v: 0.9, l: "صغير" }, { v: 1, l: "عادي" }, { v: 1.15, l: "كبير" }, { v: 1.3, l: "أكبر" }].map((o) => (
+                  <button key={o.v} className={`chip ${Math.abs(s.fontScale - o.v) < 0.01 ? "active" : ""}`} onClick={() => patch({ fontScale: o.v })}>{o.l}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="label">المظهر</label>
+              <div className="flex gap-2">
+                <button className={`chip ${s.theme === "auto" ? "active" : ""}`} onClick={() => patch({ theme: "auto" })}>🖥️ تلقائي</button>
+                <button className={`chip ${s.theme === "light" ? "active" : ""}`} onClick={() => patch({ theme: "light" })}>☀️ كريمي</button>
+                <button className={`chip ${s.theme === "dark" ? "active" : ""}`} onClick={() => patch({ theme: "dark" })}>🌙 داكن</button>
+              </div>
+            </div>
+          </div>
+          <Toggle on={s.showImages} onChange={(v) => patch({ showImages: v })} label="عرض الصور في الخلاصة (أطفئه لتوفير البيانات)" />
+          <Toggle on={s.compactView} onChange={(v) => patch({ compactView: v })} label="عرض مضغوط (قائمة بدل البطاقات)" />
+          <div className="flex gap-2 flex-wrap">
+            <button className="btn" onClick={() => void (async () => {
+              const md = await apiShare.feed.exportSaved();
+              const r = await shareText("محفوظات نبض التقنية", md);
+              toast(r === "shared" ? "تمت المشاركة" : "نُسخت المحفوظات كنص Markdown إلى الحافظة", "ok");
+            })()}>📤 تصدير المحفوظات (Markdown)</button>
+          </div>
+        </section>
+
+        <section className="panel p-5 flex flex-col gap-4">
           <div className="font-bold">✨ الوكيل الذكي (Anthropic Claude)</div>
           <div>
             <label className="label">مفتاح Anthropic API</label>
@@ -74,7 +120,7 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
               </select>
             </div>
           </div>
-          <Toggle on={s.useServerWebSearch} onChange={(v) => patch({ useServerWebSearch: v })} label="تمكين بحث الويب المدمج من Anthropic للوكيل (إضافة إلى أدوات البحث المحلية)" />
+          <Toggle on={s.useServerWebSearch} onChange={(v) => patch({ useServerWebSearch: v })} label="تمكين بحث الويب المدمج من Anthropic لوكيل AI (إضافة إلى أدوات البحث المحلية)" />
         </section>
 
         <section className="panel p-5 flex flex-col gap-4">
@@ -112,13 +158,6 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
           </div>
         </section>
 
-        <section className="panel p-5 flex flex-col gap-4">
-          <div className="font-bold">🎨 المظهر</div>
-          <div className="flex gap-2">
-            <button className={`chip ${s.theme === "light" ? "active" : ""}`} onClick={() => patch({ theme: "light" })}>☀️ كريمي (افتراضي)</button>
-            <button className={`chip ${s.theme === "dark" ? "active" : ""}`} onClick={() => patch({ theme: "dark" })}>🌙 داكن</button>
-          </div>
-        </section>
 
         <div className="flex gap-2 justify-end sticky bottom-0 py-3" style={{ background: "var(--bg)" }}>
           <button className="btn btn-accent" onClick={() => void save()} disabled={saving}>{saving ? <span className="spinner" /> : "💾"} حفظ الإعدادات</button>

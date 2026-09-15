@@ -2,7 +2,8 @@ import type { IpcMain } from "electron";
 import { shell } from "electron";
 import type { FeedQuery } from "@shared/types";
 import { aggregator } from "../../core/services/aggregator";
-import { addSource, deleteSource, feedStats, getArticle, listArticles, listSources, updateArticle, updateSource, getSource } from "../../core/services/articles";
+import { addSource, analytics, deleteSource, exportSavedMarkdown, feedStats, getArticle, listArticles, listSources, markAllRead, trendingTags, updateArticle, updateSource, getSource } from "../../core/services/articles";
+import { loadSettings } from "../../core/services/settings";
 import { classify } from "../../core/services/classify";
 
 export function registerNewsIpc(ipc: IpcMain): void {
@@ -21,6 +22,10 @@ export function registerNewsIpc(ipc: IpcMain): void {
     const terms = (a.tags.length ? a.tags.slice(0, 2) : [a.title.split(" ").slice(0, 3).join(" ")]).join(" ");
     return listArticles({ search: terms.split(" ")[0], limit: 8 }).filter((x) => x.id !== a.id).slice(0, 6);
   });
+  ipc.handle("feed:trending", () => trendingTags(48, 10));
+  ipc.handle("feed:analytics", () => analytics());
+  ipc.handle("feed:markAllRead", (_e, category?: string) => markAllRead(category));
+  ipc.handle("feed:exportSaved", () => exportSavedMarkdown());
   ipc.handle("feed:openExternal", (_e, url: string) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
   });
@@ -33,7 +38,7 @@ export function registerNewsIpc(ipc: IpcMain): void {
   ipc.handle("sources:test", async (_e, id: number) => {
     const s = getSource(Number(id));
     if (!s) throw new Error("المصدر غير موجود");
-    const items = await aggregator.fetchSource(s, "");
+    const items = await aggregator.fetchSource(s, loadSettings().xBearerToken);
     return { count: items.length, sample: items.slice(0, 3).map((i) => i.title) };
   });
 }

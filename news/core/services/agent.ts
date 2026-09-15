@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { AgentEvent, AgentMessage, AgentToolCall, Conversation } from "@shared/types";
 import { getDb, nowIso } from "../db";
 import { aggregator } from "./aggregator";
-import { getArticle, listArticles } from "./articles";
+import { analytics, getArticle, listArticles, trendingTags } from "./articles";
 import { getClient, currentModel, describeError } from "./llm";
 import { fetchSubreddit, searchReddit } from "./reddit";
 import { searchNews, searchWeb } from "./search";
@@ -94,6 +94,11 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
   },
   {
+    name: "trending_topics",
+    description: "يعيد الوسوم والمواضيع الأكثر تداولًا في أخبار التطبيق خلال آخر 48 ساعة مع إحصاءات الأسبوع (عدد الأخبار يوميًا، أهم المصادر، نسبة AI).",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "refresh_feeds",
     description: "يشغّل تحديثًا فوريًا لكل مصادر الأخبار في التطبيق ثم يعيد عدد الأخبار الجديدة. استخدمه إذا بدت قاعدة الأخبار قديمة.",
     input_schema: { type: "object", properties: {}, required: [] },
@@ -157,6 +162,14 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
     case "translate": {
       const r = await translateToArabic(truncate(String(input.text), 12000));
       return `[${r.provider}] ${r.text}`;
+    }
+    case "trending_topics": {
+      const t = trendingTags(48, 12);
+      const an = analytics();
+      return `الأكثر تداولًا (48 ساعة): ${t.map((x) => `${x.tag} (${x.count})`).join("، ") || "-"}\n` +
+        `هذا الأسبوع: ${an.weekTotal} خبر (الأسبوع السابق ${an.prevWeekTotal})، نسبة AI ${Math.round(an.aiShare * 100)}%\n` +
+        `يوميًا: ${an.days.map((d) => `${d.label}: ${d.total}`).join("، ")}\n` +
+        `أهم المصادر: ${an.topSources.map((s) => `${s.name} (${s.count})`).join("، ")}`;
     }
     case "refresh_feeds": {
       const s = await aggregator.refreshAll();

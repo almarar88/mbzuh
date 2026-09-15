@@ -3,6 +3,13 @@ import { getDb, getSetting, setSetting } from "../db";
 import { getPlatform } from "../platform";
 
 export const DEFAULT_SETTINGS: Settings = {
+  interests: [],
+  mutedKeywords: [],
+  fontScale: 1,
+  showImages: true,
+  compactView: false,
+  notifyNew: true,
+  onboarded: false,
   anthropicApiKey: "",
   model: "claude-opus-5",
   effort: "medium",

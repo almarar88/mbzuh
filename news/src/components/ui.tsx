@@ -76,7 +76,7 @@ export function Lightbox({ src, onClose }: { src: string | null; onClose: () => 
 }
 
 export function CategoryBadge({ category }: { category: "ai" | "tech" }) {
-  return <span className={`badge ${category === "ai" ? "badge-ai" : "badge-tech"}`}>{category === "ai" ? "🤖 ذكاء اصطناعي" : "💻 تقنية"}</span>;
+  return <span className={`badge ${category === "ai" ? "badge-ai" : "badge-tech"}`}>{category === "ai" ? "✦ AI" : "💻 تقنية"}</span>;
 }
 
 export function KindIcon({ kind }: { kind: string }) {

@@ -1,24 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FeedStats, RefreshProgress, Settings } from "@shared/types";
 import { api } from "@/lib/api";
+import logo from "@/assets/logo.svg";
 import { UiProvider, useToast } from "@/components/ui";
 import { FeedPage } from "@/pages/Feed";
 import { ArticlePage } from "@/pages/Article";
 import { AgentPage } from "@/pages/Agent";
 import { SourcesPage } from "@/pages/Sources";
 import { SettingsPage } from "@/pages/Settings";
+import { AnalyticsPage } from "@/pages/Analytics";
+import { Onboarding } from "@/components/Onboarding";
 
-export type Page = "feed" | "ai" | "tech" | "social" | "saved" | "agent" | "sources" | "settings";
+export type Page = "feed" | "ai" | "tech" | "social" | "saved" | "agent" | "analytics" | "sources" | "settings";
 
 const PRIMARY_TABS: Page[] = ["feed", "ai", "agent", "saved"];
 
 const NAV: { id: Page; label: string; icon: string }[] = [
   { id: "feed", label: "آخر الأخبار", icon: "🗞️" },
-  { id: "ai", label: "الذكاء الاصطناعي", icon: "🤖" },
+  { id: "ai", label: "AI", icon: "✦" },
   { id: "tech", label: "التقنية", icon: "💻" },
   { id: "social", label: "Reddit و X", icon: "💬" },
   { id: "saved", label: "المحفوظات", icon: "🔖" },
   { id: "agent", label: "الوكيل الذكي", icon: "✨" },
+  { id: "analytics", label: "تحليلات", icon: "📊" },
   { id: "sources", label: "المصادر", icon: "📡" },
   { id: "settings", label: "الإعدادات", icon: "⚙️" },
 ];
@@ -31,7 +35,14 @@ function Shell() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [feedVersion, setFeedVersion] = useState(0);
   const [agentPrefill, setAgentPrefill] = useState<string | null>(null);
+  const [feedTag, setFeedTag] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const applyPrefs = (s: Settings): void => {
+    const dark = s.theme === "dark" || (s.theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    document.documentElement.style.fontSize = `${Math.round((s.fontScale || 1) * 100)}%`;
+  };
 
   const loadStats = useCallback(() => {
     void api.feed.stats().then(setStats);
@@ -40,8 +51,11 @@ function Shell() {
   useEffect(() => {
     void api.settings.get().then((s) => {
       setSettings(s);
-      document.documentElement.dataset.theme = s.theme;
+      applyPrefs(s);
     });
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onMq = (): void => void api.settings.get().then(applyPrefs);
+    mq.addEventListener("change", onMq);
     loadStats();
     const offP = api.on.refreshProgress((p) => {
       setProgress(p);
@@ -80,6 +94,7 @@ function Shell() {
       offN();
       offC();
       offA();
+      mq.removeEventListener("change", onMq);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -88,6 +103,7 @@ function Shell() {
     try {
       setProgress({ phase: "start", done: 0, total: 0, added: 0 });
       const r = await api.feed.refresh();
+      if (r.interestHits?.length) toast(`⭐ ${r.interestHits.length} خبر جديد يطابق اهتماماتك: ${r.interestHits[0].title.slice(0, 50)}…`, "ok");
       if (r.errors.length) toast(`تعذّر جلب ${r.errors.length} مصدر (انظر صفحة المصادر)`, "info");
     } catch (e) {
       toast((e as Error).message, "error");
@@ -101,6 +117,7 @@ function Shell() {
 
   const go = (p: Page): void => {
     setArticleId(null);
+    if (p !== "feed") setFeedTag(null);
     setPage(p);
   };
 
@@ -129,7 +146,7 @@ function Shell() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="flex items-center gap-3 px-2 py-2 mb-3">
-          <div className="avatar">⚡</div>
+          <img src={logo} alt="" className="avatar" />
           <div>
             <div className="font-semibold text-[15px] leading-tight">نبض التقنية</div>
             <div className="text-[11px]" style={{ color: "var(--dark-muted)" }}>تابع وحلّل أخبار التقنية</div>
@@ -148,10 +165,10 @@ function Shell() {
             <div className="stat-tile">
               <div className="flex items-center gap-2">
                 <div className="big">{stats.today}<small>خبر اليوم</small></div>
-                <span className="ms-auto text-lg" style={{ color: "var(--accent)" }}>⚡</span>
+                <span className="ms-auto text-lg" style={{ color: "var(--accent)" }}>✦</span>
               </div>
               <div className="text-[11px] mt-2" style={{ color: "var(--dark-muted)" }}>
-                {stats.total} خبر محفوظ · {stats.ai} ذكاء اصطناعي
+                {stats.total} خبر محفوظ · {stats.ai} AI
                 {stats.lastRefreshAt && <> · حُدّث {new Date(stats.lastRefreshAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</>}
               </div>
               {progress && (
@@ -173,7 +190,7 @@ function Shell() {
           {articleId ? (
             <button className="btn btn-ghost btn-sm btn-round" onClick={() => setArticleId(null)} title="رجوع">→</button>
           ) : (
-            <div className="avatar" style={{ width: 38, height: 38, fontSize: 18 }}>⚡</div>
+            <img src={logo} alt="" className="avatar" style={{ width: 38, height: 38 }} />
           )}
           <div className="min-w-0">
             <div className="font-semibold text-[16px] leading-tight truncate">{articleId ? "الخبر" : (current?.label ?? "نبض التقنية")}</div>
@@ -191,9 +208,14 @@ function Shell() {
         ) : page === "sources" ? (
           <SourcesPage onRefreshed={() => { loadStats(); setFeedVersion((v) => v + 1); }} />
         ) : page === "settings" ? (
-          <SettingsPage onSaved={(s) => { setSettings(s); document.documentElement.dataset.theme = s.theme; }} />
+          <SettingsPage onSaved={(s) => { setSettings(s); applyPrefs(s); setFeedVersion((v) => v + 1); }} />
+        ) : page === "analytics" ? (
+          <AnalyticsPage onOpenTag={(tag) => { setFeedTag(tag); go("feed"); }} />
         ) : (
-          <FeedPage key={page} mode={page} version={feedVersion} onOpen={openArticle} onChanged={loadStats} />
+          <FeedPage key={page + (feedTag ?? "")} mode={page} version={feedVersion} settings={settings} initialTag={feedTag} onOpen={openArticle} onChanged={loadStats} onAsk={askAgent} onRefresh={refresh} />
+        )}
+        {settings && !settings.onboarded && (
+          <Onboarding onDone={(patch) => void api.settings.set(patch).then((s) => { setSettings(s); applyPrefs(s); setFeedVersion((v) => v + 1); })} />
         )}
         {moreOpen && (
           <div className="absolute inset-0 z-40 hide-wide" style={{ background: "rgb(0 0 0 / .5)" }} onClick={() => setMoreOpen(false)}>
@@ -203,7 +225,7 @@ function Shell() {
                   <span>{n.icon}</span><span>{n.label}</span>
                 </div>
               ))}
-              {stats && <div className="text-[11px] px-3 pt-2" style={{ color: "var(--muted)" }}>{stats.total} خبر · اليوم {stats.today} · ذكاء اصطناعي {stats.ai}</div>}
+              {stats && <div className="text-[11px] px-3 pt-2" style={{ color: "var(--muted)" }}>{stats.total} خبر · اليوم {stats.today} · AI {stats.ai}</div>}
             </div>
           </div>
         )}

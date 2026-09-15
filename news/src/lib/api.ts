@@ -1,5 +1,5 @@
 import type {
-  AgentEvent, AgentMessage, Analysis, Article, Conversation, FeedQuery, FeedStats, LlmStatus, RefreshProgress, Settings, Source,
+  AgentEvent, AgentMessage, Analysis, AnalyticsData, Article, Conversation, FeedQuery, FeedStats, LlmStatus, RefreshProgress, RefreshSummary, Settings, Source, Trend,
 } from "@shared/types";
 
 interface Bridge {
@@ -27,7 +27,11 @@ const ipcApi = {
     details: (id: number, force = false) => call<Article>("feed:details", id, force),
     translate: (id: number, includeContent = false) => call<Article>("feed:translate", id, includeContent),
     analyze: (id: number, force = false) => call<Analysis>("feed:analyze", id, force),
-    refresh: (sourceIds?: number[]) => call<{ added: number; sources: number; errors: { source: string; error: string }[] }>("feed:refresh", sourceIds),
+    refresh: (sourceIds?: number[]) => call<RefreshSummary>("feed:refresh", sourceIds),
+    trending: () => call<Trend[]>("feed:trending"),
+    analytics: () => call<AnalyticsData>("feed:analytics"),
+    markAllRead: (category?: string) => call<number>("feed:markAllRead", category),
+    exportSaved: () => call<string>("feed:exportSaved"),
     related: (id: number) => call<Article[]>("feed:related", id),
     openExternal: (url: string) => call<void>("feed:openExternal", url),
   },
@@ -67,6 +71,24 @@ export type Api = typeof ipcApi;
 export const api: Api = { ...ipcApi };
 
 export const isElectron = (): boolean => typeof window !== "undefined" && Boolean(window.techpulse);
+
+/** مشاركة نص/رابط: نظام المشاركة على أندرويد، وإلا الحافظة. */
+export async function shareText(title: string, text: string, url?: string): Promise<"shared" | "copied"> {
+  if (!isElectron()) {
+    try {
+      const { Share } = await import("@capacitor/share");
+      const { Capacitor } = await import("@capacitor/core");
+      if (Capacitor.isNativePlatform()) {
+        await Share.share({ title, text, url, dialogTitle: "مشاركة" });
+        return "shared";
+      }
+    } catch {
+      /* نعود إلى الحافظة */
+    }
+  }
+  await navigator.clipboard.writeText(url ? `${text}\n${url}` : text);
+  return "copied";
+}
 
 export async function initApi(): Promise<void> {
   if (isElectron()) return;

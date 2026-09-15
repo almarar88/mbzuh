@@ -66,6 +66,8 @@ export interface Article {
   hash: string;
 }
 
+export type FeedSort = "newest" | "popular" | "trending";
+
 export interface FeedQuery {
   category?: "all" | Category;
   kind?: "all" | SourceKind;
@@ -73,8 +75,34 @@ export interface FeedQuery {
   search?: string;
   savedOnly?: boolean;
   unreadOnly?: boolean;
+  /** عربي أصلي فقط */
+  arabicOnly?: boolean;
+  /** فقط ما يطابق اهتمامات المستخدم */
+  interestsOnly?: boolean;
+  /** وسم محدد (من «الأكثر تداولًا») */
+  tag?: string;
+  sort?: FeedSort;
   limit?: number;
   offset?: number;
+}
+
+export interface Trend {
+  tag: string;
+  count: number;
+}
+
+export interface AnalyticsData {
+  /** آخر 7 أيام: عدد الأخبار لكل يوم (الأقدم أولًا) */
+  days: { date: string; label: string; total: number; ai: number }[];
+  weekTotal: number;
+  prevWeekTotal: number;
+  aiShare: number;
+  topSources: { name: string; kind: SourceKind; count: number }[];
+  topTags: Trend[];
+  readCount: number;
+  savedCount: number;
+  translatedCount: number;
+  bySourceKind: { kind: SourceKind; count: number }[];
 }
 
 export interface FeedStats {
@@ -91,6 +119,15 @@ export interface FeedStats {
 export type TranslationProvider = "auto" | "llm" | "google" | "mymemory" | "none";
 
 export interface Settings {
+  /** كلمات/جهات يهتم بها المستخدم (تُبرز وتُنبّه) */
+  interests: string[];
+  /** كلمات تُخفي الأخبار التي تحتويها */
+  mutedKeywords: string[];
+  fontScale: number;
+  showImages: boolean;
+  compactView: boolean;
+  notifyNew: boolean;
+  onboarded: boolean;
   anthropicApiKey: string;
   model: string;
   effort: "low" | "medium" | "high";
@@ -100,8 +137,18 @@ export interface Settings {
   refreshMinutes: number;
   xBearerToken: string;
   useServerWebSearch: boolean;
-  theme: "dark" | "light";
+  theme: "auto" | "dark" | "light";
   maxArticleAgeDays: number;
+}
+
+export interface RefreshSummary {
+  added: number;
+  sources: number;
+  errors: { source: string; error: string }[];
+  startedAt: string;
+  finishedAt: string;
+  /** أخبار جديدة طابقت اهتمامات المستخدم */
+  interestHits: { id: number; title: string }[];
 }
 
 export interface RefreshProgress {

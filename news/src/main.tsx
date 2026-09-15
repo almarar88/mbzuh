@@ -2,12 +2,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { initApi } from "./lib/api";
+import logo from "./assets/logo.svg";
 import "./index.css";
 
 const root = createRoot(document.getElementById("root") as HTMLElement);
 root.render(
   <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "#8b837b" }}>
-    <div style={{ fontSize: 48 }}>⚡</div>
+    <img src={logo} alt="" style={{ width: 84, height: 84, borderRadius: 20 }} />
     <div>نبض التقنية — جارٍ التحضير…</div>
   </div>,
 );

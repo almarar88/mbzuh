@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Analysis, Article, Settings } from "@shared/types";
-import { api } from "@/lib/api";
-import { fullDate, host, num } from "@/lib/format";
+import { api, shareText } from "@/lib/api";
+import { fullDate, host, num, readingTime, speak, stopSpeaking } from "@/lib/format";
 import { CategoryBadge, Empty, KindIcon, Lightbox, Spinner, useToast } from "@/components/ui";
 
 const SENTIMENT: Record<Analysis["sentiment"], string> = { positive: "إيجابي", negative: "سلبي", neutral: "محايد", mixed: "متباين" };
@@ -24,7 +24,10 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
   const [view, setView] = useState<"ar" | "orig">("ar");
   const [busy, setBusy] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => () => stopSpeaking(), []);
 
   useEffect(() => {
     let alive = true;
@@ -118,6 +121,20 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
           >
             {a.saved ? "🔖 محفوظ" : "🏷️ حفظ"}
           </button>
+          <button className="btn" onClick={() => void (async () => {
+            const r = await shareText(a.titleAr || a.title, `${a.titleAr || a.title}\n${(a.summaryAr || a.summary || "").slice(0, 200)}`, a.url);
+            toast(r === "shared" ? "تمت المشاركة" : "نُسخ الرابط والعنوان إلى الحافظة", "ok");
+          })()}>📤 مشاركة</button>
+          <button className={`btn ${speaking ? "btn-accent" : ""}`} onClick={() => {
+            if (speaking) {
+              stopSpeaking();
+              setSpeaking(false);
+              return;
+            }
+            const text = `${a.titleAr || a.title}. ${(a.contentAr ? a.contentAr.replace(/<[^>]+>/g, " ") : a.summaryAr || a.contentText || a.summary || "")}`;
+            if (speak(text, () => setSpeaking(false))) setSpeaking(true);
+            else toast("القراءة الصوتية غير متاحة على هذا الجهاز", "error");
+          }}>{speaking ? "⏹ إيقاف" : "🔊 استمع"}</button>
           <button className="btn btn-primary" onClick={() => void api.feed.openExternal(a.url)}>فتح المصدر ↗</button>
         </div>
 
@@ -132,6 +149,7 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
           <span>· {host(a.url)}</span>
           <span>· {fullDate(a.publishedAt)}</span>
           {a.author && <span>· {a.author}</span>}
+          {readingTime(a.contentText || a.summary || "") > 0 && <span>· 📖 {readingTime(a.contentText || a.summary || "")} د قراءة</span>}
           {a.sourceKind === "reddit" && <span>· ▲ {num(a.score)} · 💬 {num(a.comments)} تعليق</span>}
           {a.sourceKind === "x" && <span>· ♥ {num(a.score)} · 🔁 {num(extra.retweets ?? 0)}</span>}
         </div>
@@ -207,13 +225,13 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
               <div className="flex items-center gap-2 mb-3">
                 <div className="text-lg">✨ تحليل الوكيل</div>
                 <span className="ms-auto" />
-                {analysis && <span className="badge" style={{ background: "var(--dark-2)", color: "var(--dark-muted)" }}>{analysis.engine === "llm" ? "بالذكاء الاصطناعي" : "تلخيص محلي"}</span>}
+                {analysis && <span className="badge" style={{ background: "var(--dark-2)", color: "var(--dark-muted)" }}>{analysis.engine === "llm" ? "بـ AI" : "تلخيص محلي"}</span>}
               </div>
               {!analysis ? (
                 <div className="text-sm" style={{ color: "var(--dark-muted)" }}>
                   <p className="mb-3">احصل على ملخص عربي، النقاط الرئيسية، ولماذا يهم هذا الخبر.</p>
                   <button className="btn btn-accent w-full" onClick={() => void analyze(false)} disabled={Boolean(busy)}>حلّل الخبر</button>
-                  {!settings?.anthropicApiKey && <p className="mt-2 text-[11px]">بلا مفتاح API يُستخدم تلخيص استخلاصي محلي. أضف مفتاح Anthropic من الإعدادات لتحليل أعمق.</p>}
+                  {!settings?.anthropicApiKey && <p className="mt-2 text-[11px]">بلا مفتاح API يُستخدم تلخيص محلي. أضف مفتاح Anthropic من الإعدادات لتحليل AI أعمق.</p>}
                 </div>
               ) : (
                 <div className="text-sm flex flex-col gap-3">
@@ -244,6 +262,16 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
                   <button className="btn btn-sm" style={{ background: "var(--dark-2)", color: "var(--dark-ink)" }} onClick={() => void analyze(true)} disabled={Boolean(busy)}>إعادة التحليل</button>
                 </div>
               )}
+              <div className="flex gap-1.5 flex-wrap mt-3">
+                {[
+                  { l: "لماذا يهم؟", p: `لماذا يهم هذا الخبر (#${a.id}: «${a.titleAr || a.title}»)؟ وما أثره المتوقع خلال الأشهر القادمة؟` },
+                  { l: "اشرح ببساطة", p: `اشرح لي هذا الخبر (#${a.id}) بلغة بسيطة لغير المتخصصين مع مثال.` },
+                  { l: "رأي المجتمع", p: `ابحث في Reddit وX عن ردود الفعل على هذا الخبر (#${a.id}: «${a.title}») ولخّص الآراء المؤيدة والمعارضة.` },
+                  { l: "تغطيات أخرى", p: `ابحث عن تغطيات أخرى لهذا الخبر (#${a.id}: «${a.title}») في مصادر مختلفة وقارن ما تتفق عليه وما تختلف فيه.` },
+                ].map((q) => (
+                  <button key={q.l} className="chip" style={{ background: "var(--dark-2)", color: "var(--dark-ink)", boxShadow: "none" }} onClick={() => onAsk(q.p)}>{q.l}</button>
+                ))}
+              </div>
               <button className="btn w-full mt-3" style={{ background: "var(--dark-2)", color: "var(--dark-ink)" }} onClick={() => onAsk(`حلّل هذا الخبر بالتفصيل (المعرّف #${a.id}): «${a.titleAr || a.title}». ابحث عن تغطيات أخرى وردود الفعل على Reddit وX، وقارن المصادر، وبيّن ما هو مؤكد وما هو تخمين.`)}>
                 اسأل الوكيل عن هذا الخبر ✨
               </button>

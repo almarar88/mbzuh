@@ -16,7 +16,7 @@ export const DEFAULT_SOURCES: SourceSeed[] = [
   { kind: "rss", name: "عالم التقنية", target: "https://www.tech-wd.com/wd/feed/", lang: "ar", techOnly: true },
   { kind: "rss", name: "عرب هاردوير", target: "https://arabhardware.net/feed", lang: "ar", techOnly: true },
   { kind: "rss", name: "التقنية بلا حدود", target: "https://www.unlimit-tech.com/feed/", lang: "ar", techOnly: true },
-  { kind: "gnews", name: "أخبار Google — الذكاء الاصطناعي", target: "الذكاء الاصطناعي", lang: "ar", techOnly: false },
+  { kind: "gnews", name: "أخبار Google — AI", target: "الذكاء الاصطناعي", lang: "ar", techOnly: false },
   { kind: "gnews", name: "أخبار Google — التقنية", target: "تقنية OR تكنولوجيا OR هواتف OR شركات التقنية", lang: "ar", techOnly: false },
   { kind: "gnews", name: "أخبار Google — OpenAI وChatGPT", target: "OpenAI OR ChatGPT OR جوجل جيميني OR كلود", lang: "ar", techOnly: false },
   // ── ذكاء اصطناعي (إنجليزي) ──

@@ -9,7 +9,7 @@ const KIND_HINT: Record<SourceKind, string> = {
   rss: "رابط الخلاصة، مثل https://example.com/feed/",
   reddit: "اسم المجتمع بدون r/، مثل artificial",
   x: "اسم الحساب بدون @، مثل OpenAI",
-  gnews: "كلمات البحث، مثل: الذكاء الاصطناعي OR روبوتات",
+  gnews: "كلمات البحث، مثل: AI OR الذكاء الاصطناعي OR روبوتات",
 };
 
 export function SourcesPage({ onRefreshed }: { onRefreshed: () => void }) {

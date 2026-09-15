@@ -45,10 +45,11 @@ function buildMenu(): void {
       label: "الأقسام",
       submenu: [
         { label: "آخر الأخبار", click: () => send("app:navigate", "feed") },
-        { label: "الذكاء الاصطناعي", click: () => send("app:navigate", "ai") },
+        { label: "AI", click: () => send("app:navigate", "ai") },
         { label: "التقنية", click: () => send("app:navigate", "tech") },
         { label: "المحفوظات", click: () => send("app:navigate", "saved") },
         { label: "الوكيل الذكي", accelerator: "CmdOrCtrl+J", click: () => send("app:navigate", "agent") },
+        { label: "تحليلات", click: () => send("app:navigate", "analytics") },
         { label: "المصادر", click: () => send("app:navigate", "sources") },
         { label: "الإعدادات", click: () => send("app:navigate", "settings") },
       ],
@@ -74,7 +75,7 @@ function buildMenu(): void {
             void dialog.showMessageBox({
               type: "info",
               title: "عن نبض التقنية",
-              message: "نبض التقنية — أخبار التقنية والذكاء الاصطناعي",
+              message: "نبض التقنية — أخبار التقنية وAI",
               detail:
                 `الإصدار ${app.getVersion()} — تطوير Alcode\n` +
                 "يجمع الأخبار مباشرة من خلاصات المواقع التقنية العربية والعالمية وReddit وX وأخبار Google، " +
@@ -95,7 +96,7 @@ function createWindow(): void {
     height: 920,
     minWidth: 360,
     minHeight: 600,
-    title: "نبض التقنية — أخبار التقنية والذكاء الاصطناعي",
+    title: "نبض التقنية — أخبار التقنية وAI",
     backgroundColor: "#e7e2da",
     show: false,
     webPreferences: {
@@ -136,7 +137,7 @@ function createWindow(): void {
       void (async () => {
         const fs = await import("node:fs");
         const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-        const pages = ["feed", "ai", "agent", "sources", "settings"];
+        const pages = ["feed", "analytics", "agent", "settings"];
         await wait(Number(process.env.TECHPULSE_SCREENSHOT_WAIT ?? 15000));
         for (const p of pages) {
           send("app:navigate", p);

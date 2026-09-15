@@ -14,7 +14,7 @@ const w = (s: string): RegExp => new RegExp(`(^|[^\\p{L}\\p{N}])${s}(?=$|[^\\p{L
 const a = (s: string): RegExp => new RegExp(s, "u");
 
 const GROUPS: KeywordGroup[] = [
-  { tag: "ذكاء اصطناعي", ai: true, words: [w("ai"), w("a\\.i\\."), w("artificial intelligence"), a("الذكاء الاصطناعي"), a("ذكاء اصطناعي"), a("بالذكاء الاصطناعي"), w("agi"), w("genai"), w("generative ai"), a("التوليدي")] },
+  { tag: "AI", ai: true, words: [w("ai"), w("a\\.i\\."), w("artificial intelligence"), a("الذكاء الاصطناعي"), a("ذكاء اصطناعي"), a("بالذكاء الاصطناعي"), w("agi"), w("genai"), w("generative ai"), a("التوليدي")] },
   { tag: "نماذج لغوية", ai: true, words: [w("llm"), w("llms"), w("large language model"), w("language model"), a("نموذج لغوي"), a("النماذج اللغوية"), a("نماذج لغوية"), w("foundation model"), w("transformer"), w("reasoning model")] },
   { tag: "ChatGPT / OpenAI", ai: true, words: [w("chatgpt"), w("openai"), w("gpt-?\\d[\\w.-]*"), w("gpt"), w("sora"), w("dall-?e"), w("sam altman"), a("شات جي بي تي"), a("أوبن إيه آي"), a("أوبن آي"), a("سام ألتمان"), a("جي بي تي")] },
   { tag: "Claude / Anthropic", ai: true, words: [w("claude"), w("anthropic"), a("كلود"), a("أنثروبيك"), a("انثروبيك")] },

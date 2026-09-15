@@ -115,3 +115,29 @@ export function markdownToHtml(md: string): string {
   if (inCode) out.push("</code></pre>");
   return out.join("");
 }
+
+/** تقدير وقت القراءة بالدقائق (≈ 200 كلمة/دقيقة). */
+export function readingTime(text: string): number {
+  const words = (text || "").trim().split(/\s+/).filter(Boolean).length;
+  return words < 60 ? 0 : Math.max(1, Math.round(words / 200));
+}
+
+/** قراءة نص بصوت عربي عبر Web Speech API. */
+export function speak(text: string, onEnd?: () => void): boolean {
+  if (typeof speechSynthesis === "undefined") return false;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.slice(0, 4000));
+  const voices = speechSynthesis.getVoices();
+  const ar = voices.find((v) => v.lang.toLowerCase().startsWith("ar"));
+  if (ar) u.voice = ar;
+  u.lang = ar?.lang ?? "ar-SA";
+  u.rate = 1;
+  u.onend = () => onEnd?.();
+  u.onerror = () => onEnd?.();
+  speechSynthesis.speak(u);
+  return true;
+}
+
+export function stopSpeaking(): void {
+  if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+}
