@@ -1,6 +1,6 @@
 /** نقطة انطلاق تطبيق «نبض التقنية» لسطح المكتب. */
 import path from "node:path";
-import { BrowserWindow, Menu, app, dialog, ipcMain, net, shell } from "electron";
+import { BrowserWindow, Menu, Notification, app, dialog, ipcMain, net, shell } from "electron";
 import type { RefreshProgress, Settings } from "@shared/types";
 import { parseHTML } from "linkedom";
 import { getDb } from "../core/db";
@@ -26,7 +26,27 @@ function scheduleRefresh(settings: Settings): void {
   if (refreshTimer) clearInterval(refreshTimer);
   const minutes = Math.max(5, settings.refreshMinutes || 30);
   refreshTimer = setInterval(() => {
-    if (!aggregator.refreshing) void aggregator.refreshAll().catch(() => undefined);
+    if (aggregator.refreshing) return;
+    void aggregator
+      .refreshAll()
+      .then((r) => {
+        const s = loadSettings();
+        if (!s.notifyNew || r.added === 0 || mainWindow?.isFocused() || !Notification.isSupported()) return;
+        const hit = r.interestHits[0];
+        if (s.notifyInterestsOnly && !hit) return;
+        const n = new Notification({
+          title: hit ? `⭐ خبر يهمّك: ${hit.title.slice(0, 60)}` : `نبض التقنية: ${r.added} خبر جديد`,
+          body: hit ? `و${r.added - 1} خبر آخر جديد` : "اضغط لقراءة أحدث أخبار التقنية وAI",
+          icon: path.join(__dirname, "../build/icon.png"),
+        });
+        n.on("click", () => {
+          mainWindow?.show();
+          mainWindow?.focus();
+          if (hit) send("app:open-article", hit.id);
+        });
+        n.show();
+      })
+      .catch(() => undefined);
   }, minutes * 60 * 1000);
 }
 

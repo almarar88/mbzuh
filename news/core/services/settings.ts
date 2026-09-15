@@ -9,6 +9,8 @@ export const DEFAULT_SETTINGS: Settings = {
   showImages: true,
   compactView: false,
   notifyNew: true,
+  notifyInterestsOnly: false,
+  backgroundRefresh: true,
   onboarded: false,
   anthropicApiKey: "",
   model: "claude-opus-5",

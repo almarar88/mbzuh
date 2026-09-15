@@ -96,3 +96,51 @@ export async function initApi(): Promise<void> {
   const local = await createLocalApi();
   Object.assign(api, local);
 }
+
+/** حالة إذن التنبيهات وطلبه (أندرويد)، واختبار تنبيه. */
+export const notifications = {
+  async status(): Promise<"granted" | "denied" | "prompt" | "unsupported"> {
+    if (isElectron()) return "granted";
+    try {
+      const { Capacitor } = await import("@capacitor/core");
+      if (!Capacitor.isNativePlatform()) return "unsupported";
+      const { LocalNotifications } = await import("@capacitor/local-notifications");
+      const p = await LocalNotifications.checkPermissions();
+      return p.display === "granted" ? "granted" : p.display === "denied" ? "denied" : "prompt";
+    } catch {
+      return "unsupported";
+    }
+  },
+  async request(): Promise<boolean> {
+    try {
+      const { LocalNotifications } = await import("@capacitor/local-notifications");
+      const p = await LocalNotifications.requestPermissions();
+      return p.display === "granted";
+    } catch {
+      return false;
+    }
+  },
+  async test(): Promise<void> {
+    if (isElectron()) {
+      new Notification("نبض التقنية", { body: "هكذا ستصلك تنبيهات الأخبار الجديدة ✦" });
+      return;
+    }
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
+    await LocalNotifications.schedule({ notifications: [{ id: 424242, title: "نبض التقنية", body: "هكذا ستصلك تنبيهات الأخبار الجديدة ✦", smallIcon: "ic_launcher_foreground" }] });
+  },
+  async widgetCount(): Promise<number | null> {
+    if (isElectron()) return null;
+    try {
+      const { Capacitor } = await import("@capacitor/core");
+      if (!Capacitor.isNativePlatform()) return null;
+      const { TechPulseNative } = await import("@/platform/native");
+      return (await TechPulseNative.widgetCount()).count;
+    } catch {
+      return null;
+    }
+  },
+  async runBackgroundNow(): Promise<void> {
+    const { TechPulseNative } = await import("@/platform/native");
+    await TechPulseNative.runOnceNow();
+  },
+};

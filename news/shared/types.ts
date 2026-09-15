@@ -127,6 +127,8 @@ export interface Settings {
   showImages: boolean;
   compactView: boolean;
   notifyNew: boolean;
+  notifyInterestsOnly: boolean;
+  backgroundRefresh: boolean;
   onboarded: boolean;
   anthropicApiKey: string;
   model: string;

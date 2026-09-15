@@ -7,7 +7,9 @@ import type { AgentEvent, RefreshProgress, Settings } from "@shared/types";
 import { setPlatform } from "@core/platform";
 import { setFetchImpl } from "@core/services/http";
 import { aggregator } from "@core/services/aggregator";
-import { addSource, analytics, deleteSource, exportSavedMarkdown, feedStats, getArticle, getSource, listArticles, listSources, markAllRead, trendingTags, updateArticle, updateSource } from "@core/services/articles";
+import { addSource, analytics, deleteSource, exportSavedMarkdown, feedStats, findIdByUrl, getArticle, getSource, listArticles, listSources, markAllRead, trendingTags, updateArticle, updateSource } from "@core/services/articles";
+import { gnewsSearchUrl } from "@core/services/gnews";
+import { TechPulseNative } from "./native";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { createConversation, deleteConversation, isAgentRunning, listConversations, listMessages, runAgent, stopAgent } from "@core/services/agent";
 import { llmStatus } from "@core/services/llm";
@@ -39,6 +41,78 @@ const openArticleEm = new Emitter<number>();
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 let appActive = true;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** يزوّد الكود الأصلي بعناصر الويدجت (عناوين مترجمة) وإعدادات عامل الخلفية. */
+async function syncNative(): Promise<void> {
+  if (!isNative) return;
+  try {
+    const s = loadSettings();
+    const latest = listArticles({ limit: 20, sort: "newest" });
+    const items = latest.map((a) => ({
+      id: a.id,
+      title: a.titleAr || a.title,
+      url: a.url,
+      source: a.sourceName,
+      category: a.category,
+      publishedAt: a.publishedAt,
+      image: a.imageUrl ?? "",
+    }));
+    const sources = listSources()
+      .filter((x) => x.enabled && (x.kind === "rss" || x.kind === "gnews"))
+      .map((x) => ({ name: x.name, url: x.kind === "gnews" ? gnewsSearchUrl(x.target, x.lang === "en" ? "en" : "ar") : x.target, techOnly: Boolean(x.techOnly), lang: x.lang }));
+    const seenUrls = listArticles({ limit: 300, sort: "newest" }).map((a) => a.url);
+    await TechPulseNative.sync({
+      items,
+      settings: { notifyNew: s.notifyNew, notifyInterestsOnly: s.notifyInterestsOnly, interests: s.interests, muted: s.mutedKeywords, sources },
+      seenUrls,
+    });
+  } catch (e) {
+    console.warn("native sync failed", e);
+  }
+}
+
+function scheduleSync(): void {
+  if (!isNative) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => void syncNative(), 1200);
+}
+
+async function configureBackground(s: Settings): Promise<void> {
+  if (!isNative) return;
+  try {
+    await TechPulseNative.configureBackground({ enabled: s.backgroundRefresh && s.notifyNew, minutes: Math.max(15, s.refreshMinutes || 30) });
+  } catch (e) {
+    console.warn("background config failed", e);
+  }
+}
+
+/** يفتح خبرًا من رابط داخلي techpulse://article/ID أو techpulse://open?url=… */
+async function handleDeepLink(url: string): Promise<void> {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "techpulse:") return;
+    if (u.host === "article") {
+      const id = Number(u.pathname.replace(/\//g, ""));
+      if (id) openArticleEm.emit(id);
+      return;
+    }
+    if (u.host === "open") {
+      const target = u.searchParams.get("url") ?? "";
+      let id = findIdByUrl(target);
+      if (!id) {
+        await refreshAndNotify();
+        id = findIdByUrl(target);
+      }
+      if (id) openArticleEm.emit(id);
+      else if (target) await openExternal(target);
+      return;
+    }
+    navigateEm.emit("feed");
+  } catch {
+    /* رابط غير صالح */
+  }
+}
 let lastRefreshAt = 0;
 
 /** تنبيه محلي بالأخبار الجديدة عندما يكون التطبيق في الخلفية. */
@@ -74,6 +148,7 @@ async function refreshAndNotify(): Promise<void> {
     const s = await aggregator.refreshAll();
     lastRefreshAt = Date.now();
     void notifyNewArticles(s);
+    scheduleSync();
   } catch {
     /* تجاهل */
   }
@@ -93,8 +168,13 @@ export async function createLocalApi(): Promise<Api> {
   setFetchImpl(nativeFetch);
   await openSqlJsDb(persistHooks, new URL("./sql-wasm.wasm", document.baseURI).toString());
   seedSources();
-  aggregator.onProgress((p) => progressEm.emit(p));
+  aggregator.onProgress((p) => {
+    progressEm.emit(p);
+    if ((p.phase === "translate" || p.phase === "details") && p.done === p.total) scheduleSync();
+  });
   scheduleRefresh(loadSettings());
+  void configureBackground(loadSettings());
+  scheduleSync();
   if (isNative) {
     void CapApp.addListener("pause", () => {
       appActive = false;
@@ -104,6 +184,10 @@ export async function createLocalApi(): Promise<Api> {
       appActive = true;
       // تحديث عند العودة إن مضى أكثر من 15 دقيقة
       if (Date.now() - lastRefreshAt > 15 * 60 * 1000) void refreshAndNotify();
+    });
+    void CapApp.addListener("appUrlOpen", ({ url }) => void handleDeepLink(url));
+    void CapApp.getLaunchUrl().then((r) => {
+      if (r?.url) setTimeout(() => void handleDeepLink(r.url), 800);
     });
     void LocalNotifications.addListener("localNotificationActionPerformed", (ev) => {
       const id = Number((ev.notification.extra as { articleId?: number } | undefined)?.articleId);
@@ -130,6 +214,7 @@ export async function createLocalApi(): Promise<Api> {
       refresh: async (sourceIds) => {
         const s = await aggregator.refreshAll(sourceIds);
         lastRefreshAt = Date.now();
+        scheduleSync();
         return s;
       },
       trending: async () => trendingTags(48, 10),
@@ -161,6 +246,8 @@ export async function createLocalApi(): Promise<Api> {
       set: async (patch) => {
         const s = saveSettings(patch);
         scheduleRefresh(s);
+        void configureBackground(s);
+        scheduleSync();
         return s;
       },
     },

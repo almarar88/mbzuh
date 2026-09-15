@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/item_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:layoutDirection="rtl">
+
+    <ImageView
+        android:id="@+id/item_thumb"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:scaleType="centerCrop"
+        android:layout_marginEnd="10dp"
+        android:background="@drawable/widget_thumb_bg"
+        android:contentDescription="@null"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/item_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#26221F"
+            android:textSize="13.5sp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp"
+            android:textDirection="anyRtl" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="3dp">
+
+            <TextView
+                android:id="@+id/item_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="7dp"
+                android:paddingEnd="7dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/widget_badge_ai"
+                android:text="AI" />
+
+            <TextView
+                android:id="@+id/item_meta"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:textColor="#8B837B"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

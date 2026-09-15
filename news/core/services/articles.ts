@@ -1,6 +1,7 @@
 /** مستودع المقالات والمصادر (استعلامات SQLite). */
 import type { Analysis, AnalyticsData, Article, FeedQuery, FeedStats, Source, SourceKind, Trend } from "@shared/types";
 import { loadSettings } from "./settings";
+import { normalizeUrl, sha1 } from "./text";
 import { getDb, nowIso } from "../db";
 
 function parseJson<T>(s: unknown, fallback: T): T {
@@ -135,6 +136,11 @@ export function listArticles(q: FeedQuery): Article[] {
 export function getArticle(id: number): Article | null {
   const row = getDb().prepare(`${SELECT} WHERE a.id = ?`).get(id);
   return row ? rowToArticle(row) : null;
+}
+
+export function findIdByUrl(url: string): number | null {
+  const row = getDb().prepare("SELECT id FROM articles WHERE hash = ? OR url = ? LIMIT 1").get(sha1(normalizeUrl(url)), url) as { id: number } | undefined;
+  return row?.id ?? null;
 }
 
 export function findByHash(hash: string): number | null {

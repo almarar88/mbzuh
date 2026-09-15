@@ -4,4 +4,7 @@
     <string name="title_activity_main">نبض التقنية</string>
     <string name="package_name">com.alcode.techpulse</string>
     <string name="custom_url_scheme">com.alcode.techpulse</string>
+    <string name="widget_description">أحدث أخبار التقنية وAI من نبض التقنية</string>
+    <string name="widget_empty">افتح التطبيق لجلب الأخبار</string>
+    <string name="widget_refresh">تحديث</string>
 </resources>

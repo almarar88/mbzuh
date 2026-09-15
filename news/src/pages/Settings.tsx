@@ -3,7 +3,7 @@ import type { Settings } from "@shared/types";
 import { api } from "@/lib/api";
 import { Spinner, Toggle, useToast } from "@/components/ui";
 import { TagInput } from "@/components/TagInput";
-import { api as apiShare, shareText } from "@/lib/api";
+import { api as apiShare, isElectron, notifications, shareText } from "@/lib/api";
 
 const MODELS = [
   { id: "claude-opus-5", label: "Claude Opus 5 — الأقوى (افتراضي)" },
@@ -16,10 +16,14 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
   const [s, setS] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [notifStatus, setNotifStatus] = useState<"granted" | "denied" | "prompt" | "unsupported">("unsupported");
+  const [widgets, setWidgets] = useState<number | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     void api.settings.get().then(setS);
+    void notifications.status().then(setNotifStatus);
+    void notifications.widgetCount().then(setWidgets);
   }, []);
 
   if (!s) return <div className="p-10"><Spinner /></div>;
@@ -58,8 +62,40 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
             <label className="label">كلمات مكتومة — تُخفى الأخبار التي تحتويها</label>
             <TagInput value={s.mutedKeywords} onChange={(v) => patch({ mutedKeywords: v })} placeholder="مثل: عملات رقمية، ألعاب…" />
           </div>
-          <Toggle on={s.notifyNew} onChange={(v) => patch({ notifyNew: v })} label="تنبيه بالأخبار الجديدة عندما يكون التطبيق في الخلفية (أندرويد)" />
         </section>
+
+        <section className="panel p-5 flex flex-col gap-4">
+          <div className="font-bold">🔔 التنبيهات</div>
+          <Toggle on={s.notifyNew} onChange={(v) => patch({ notifyNew: v })} label="تنبيهات بالأخبار الجديدة" />
+          <Toggle on={s.notifyInterestsOnly} onChange={(v) => patch({ notifyInterestsOnly: v })} label="اهتماماتي فقط (بلا ملخص الأخبار العامة)" />
+          <Toggle on={s.backgroundRefresh} onChange={(v) => patch({ backgroundRefresh: v })} label="الجلب في الخلفية والتطبيق مغلق (أندرويد، كل فترة التحديث — الحد الأدنى 15 دقيقة)" />
+          <div className="text-[11px] muted">
+            {notifStatus === "granted" && "✓ إذن التنبيهات ممنوح."}
+            {notifStatus === "prompt" && "لم يُمنح إذن التنبيهات بعد."}
+            {notifStatus === "denied" && "إذن التنبيهات مرفوض — فعّله من إعدادات النظام للتطبيق."}
+            {notifStatus === "unsupported" && !isElectron() && "التنبيهات متاحة على أندرويد."}
+            {isElectron() && "على ويندوز تصلك تنبيهات سطح المكتب عند وجود أخبار جديدة والنافذة في الخلفية."}
+            {!isElectron() && " لضمان الوصول في الوقت المحدد، استثنِ التطبيق من «تحسين البطارية» في إعدادات النظام."}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {notifStatus !== "granted" && notifStatus !== "unsupported" && (
+              <button className="btn btn-accent" onClick={() => void notifications.request().then((ok) => { setNotifStatus(ok ? "granted" : "denied"); toast(ok ? "تم منح الإذن" : "لم يُمنح الإذن", ok ? "ok" : "error"); })}>السماح بالتنبيهات</button>
+            )}
+            <button className="btn" onClick={() => void notifications.test().then(() => toast("أُرسل تنبيه تجريبي", "ok")).catch((e: Error) => toast(e.message, "error"))}>🔔 تنبيه تجريبي</button>
+            {!isElectron() && <button className="btn" onClick={() => void notifications.runBackgroundNow().then(() => toast("بدأ الجلب في الخلفية", "ok")).catch(() => toast("غير متاح هنا", "error"))}>▶ جرّب الجلب في الخلفية الآن</button>}
+          </div>
+        </section>
+
+        {!isElectron() && (
+          <section className="panel p-5 flex flex-col gap-3">
+            <div className="font-bold">📱 ويدجت الشاشة الرئيسية</div>
+            <p className="text-sm muted leading-relaxed">
+              يعرض أحدث الأخبار المترجمة مباشرة على الشاشة الرئيسية ويفتح الخبر بنقرة، ويتحدّث تلقائيًا مع كل جلب (في التطبيق أو في الخلفية).
+              لإضافته: اضغط مطوّلًا على مساحة فارغة في الشاشة الرئيسية ← «الودجات» ← «نبض التقنية»، ويمكن تغيير حجمه ليناسب هاتفك أو شاشة Fold المفتوحة.
+            </p>
+            <div className="text-[11px] muted">{widgets === null ? "" : widgets > 0 ? `✓ مُضاف حاليًا: ${widgets}` : "لم يُضف الويدجت بعد."}</div>
+          </section>
+        )}
 
         <section className="panel p-5 flex flex-col gap-4">
           <div className="font-bold">📖 القراءة والعرض</div>
