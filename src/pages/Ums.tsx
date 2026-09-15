@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 import { Button, useUi } from "../components/ui";
 import { Icon } from "../components/icons";
 import type { UmsState } from "@shared/types";
+import logoUrl from "../assets/logo.png";
 
 export default function UmsPage() {
   const { toast } = useUi();
@@ -197,6 +198,7 @@ export default function UmsPage() {
             </div>
           ) : (
             <div className="text-center">
+              <img src={logoUrl} alt="" width={120} height={120} className="mx-auto mb-4 float" style={{ opacity: 0.85 }} />
               <div className="skeleton mx-auto mb-3" style={{ width: 240, height: 14 }} />
               <div className="skeleton mx-auto" style={{ width: 160, height: 14 }} />
               <p className="text-sm mt-4" style={{ color: "var(--muted)" }}>

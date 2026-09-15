@@ -17,6 +17,7 @@ import StudentsPage from "./pages/Students";
 import ReportsPage from "./pages/Reports";
 import MinutesPage from "./pages/Minutes";
 import SettingsPage from "./pages/Settings";
+import logoUrl from "./assets/logo.png";
 
 export type PageId =
   | "dashboard" | "ums" | "assistant" | "tasks"
@@ -271,15 +272,16 @@ export default function App() {
             <div
               className="flex items-center justify-center shrink-0"
               style={{
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 borderRadius: 14,
-                background: "var(--gold-grad)",
-                color: "#1a1305",
-                boxShadow: "0 8px 20px color-mix(in srgb, var(--accent) 35%, transparent)",
+                background: "linear-gradient(135deg, #ffffff, #f3eee3)",
+                border: "1px solid color-mix(in srgb, var(--accent) 55%, transparent)",
+                boxShadow: "0 8px 20px color-mix(in srgb, var(--accent) 30%, transparent)",
+                padding: 3,
               }}
             >
-              <Icon name="book" size={22} />
+              <img src={logoUrl} alt="شعار الجامعة" width={42} height={42} style={{ display: "block" }} />
             </div>
             <div className="min-w-0">
               <div className="font-extrabold leading-tight text-[15px]">منصّة الإداري</div>

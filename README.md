@@ -8,7 +8,7 @@
 والتقارير والمحاضر — كلها ببيانات محلية على جهازك.
 
 <p align="center">
-  <img src="build/icon.png" width="120" alt="شعار منصّة الإداري" />
+  <img src="build/icon.png" width="140" alt="شعار الجامعة — أيقونة التطبيق" />
 </p>
 
 <p align="center">

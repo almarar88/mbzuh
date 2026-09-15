@@ -1,51 +1,41 @@
-/** يولّد أيقونة التطبيق (build/icon.png + build/icon.ico) من رسم SVG أصلي. */
-// Generates build/icon.png (1024) and build/icon.ico (multi-size, PNG-compressed entries).
+/**
+ * يولّد أيقونة التطبيق (build/icon.png + build/icon.ico) من شعار الجامعة
+ * build/logo-source.png (خلفية شفافة) موضوعًا على بلاطة بيضاء بزوايا ناعمة.
+ */
 import sharp from "sharp";
 import { writeFileSync } from "node:fs";
 
-const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+const SIZE = 1024;
+const LOGO = Math.round(SIZE * 0.8);
+
+const tile = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#14264a"/>
-      <stop offset="1" stop-color="#071228"/>
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f3eee3"/>
     </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f3d27a"/>
-      <stop offset="0.55" stop-color="#c9a24a"/>
-      <stop offset="1" stop-color="#8f6427"/>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d9bb6a"/>
+      <stop offset="1" stop-color="#956a28"/>
     </linearGradient>
-    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff8e6"/>
-      <stop offset="1" stop-color="#e9d6a8"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.35" r="0.6">
-      <stop offset="0" stop-color="#c9a24a" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#c9a24a" stop-opacity="0"/>
-    </radialGradient>
   </defs>
-  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#bg)"/>
-  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="url(#glow)"/>
-  <!-- pointed arch -->
-  <path d="M512 150 C 380 220, 250 330, 250 520 L 250 860 L 774 860 L 774 520 C 774 330, 644 220, 512 150 Z"
-        fill="none" stroke="url(#gold)" stroke-width="46" stroke-linejoin="round"/>
-  <!-- open book -->
-  <path d="M300 620 C 380 590, 460 600, 512 640 C 564 600, 644 590, 724 620 L 724 790 C 644 760, 564 770, 512 810 C 460 770, 380 760, 300 790 Z"
-        fill="url(#page)"/>
-  <path d="M512 640 L 512 810" stroke="#8f6427" stroke-width="14" stroke-linecap="round"/>
-  <path d="M340 665 C 400 648, 450 655, 490 680 M340 715 C 400 698, 450 705, 490 730 M340 765 C 400 748, 450 755, 490 780
-           M684 665 C 624 648, 574 655, 534 680 M684 715 C 624 698, 574 705, 534 730 M684 765 C 624 748, 574 755, 534 780"
-        stroke="#8f6427" stroke-opacity="0.55" stroke-width="10" stroke-linecap="round" fill="none"/>
-  <!-- star -->
-  <g transform="translate(512 420)">
-    <polygon points="0,-90 26,-36 88,-28 42,14 54,76 0,46 -54,76 -42,14 -88,-28 -26,-36" fill="url(#gold)"/>
-  </g>
+  <rect x="0" y="0" width="${SIZE}" height="${SIZE}" rx="224" fill="url(#bg)"/>
+  <rect x="14" y="14" width="${SIZE - 28}" height="${SIZE - 28}" rx="212" fill="none" stroke="url(#ring)" stroke-width="16" opacity="0.9"/>
 </svg>`;
 
-const png1024 = await sharp(Buffer.from(svg)).png().toBuffer();
+const logo = await sharp("build/logo-source.png")
+  .resize(LOGO, LOGO, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+  .png()
+  .toBuffer();
+
+const png1024 = await sharp(Buffer.from(tile))
+  .composite([{ input: logo, left: Math.round((SIZE - LOGO) / 2), top: Math.round((SIZE - LOGO) / 2) }])
+  .png()
+  .toBuffer();
 writeFileSync("build/icon.png", png1024);
 
-// ICO with PNG-encoded entries (supported since Vista).
+// ICO بمدخلات PNG (مدعوم منذ Vista).
 const sizes = [256, 128, 64, 48, 32, 16];
 const entries = [];
 for (const s of sizes) {
@@ -71,6 +61,4 @@ for (const e of entries) {
   dir.push(d);
 }
 writeFileSync("build/icon.ico", Buffer.concat([header, ...dir, ...entries.map((e) => e.buf)]));
-
-
-console.log("ok", png1024.length);
+console.log("ok icon.png", png1024.length, "bytes; icon.ico", offset, "bytes");
