@@ -243,7 +243,7 @@ export default function SettingsPage({ onThemeChange, onOrgChange }: { onThemeCh
           </h3>
           <p className="text-xs mb-2" style={{ color: "var(--muted)" }}>
             {ai?.computerAvailable
-              ? "يتيح للمساعد فتح البرامج والملفات، رؤية الشاشة والنقر والكتابة، تنفيذ أوامر، وقراءة البوابات المفتوحة والتحكم فيها."
+              ? "قراءة البوابات والتحكم فيها متاحة للمساعد دائمًا على ويندوز. هذا الخيار يضيف التحكم بنظام التشغيل: فتح البرامج والملفات، رؤية الشاشة، النقر والكتابة، وتنفيذ الأوامر."
               : "متاح في نسخة ويندوز فقط. على الهاتف يعمل المساعد على بيانات التطبيق والبحث في الإنترنت."}
           </p>
           <Toggle on={!!ai?.computerControl} onChange={(v) => void savePrefs({ computerControl: v })} label="تفعيل التحكم بالكمبيوتر" hint={ai?.computerAvailable ? "الأدوات تظهر للمساعد فقط عند التفعيل" : "غير متاح على هذه المنصة"} />

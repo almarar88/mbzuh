@@ -21,8 +21,8 @@
 
 | المنصة | الملف |
 |---|---|
-| **ويندوز (64-بت)** | [MBZUH-Admin-Setup-2.1.0.exe](https://github.com/almarar88/mbzuh/releases/download/v2.1.0/MBZUH-Admin-Setup-2.1.0.exe) |
-| **أندرويد (10 فأحدث، يدعم هواتف الطي)** | [MBZUH-Admin-2.1.0-release.apk](https://github.com/almarar88/mbzuh/releases/download/android-v2.1.0/MBZUH-Admin-2.1.0-release.apk) |
+| **ويندوز (64-بت)** | [MBZUH-Admin-Setup-2.1.1.exe](https://github.com/almarar88/mbzuh/releases/download/v2.1.1/MBZUH-Admin-Setup-2.1.1.exe) |
+| **أندرويد (10 فأحدث، يدعم هواتف الطي)** | [MBZUH-Admin-2.1.1-release.apk](https://github.com/almarar88/mbzuh/releases/download/android-v2.1.1/MBZUH-Admin-2.1.1-release.apk) |
 
 كل الإصدارات في [صفحة الإصدارات](https://github.com/almarar88/mbzuh/releases).
 

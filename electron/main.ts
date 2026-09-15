@@ -167,7 +167,7 @@ if (!app.requestSingleInstanceLock()) {
     registerLogisticsIpc(ipcMain);
     registerAcademicsIpc(ipcMain);
     registerWorkspaceIpc(ipcMain);
-    registerExtraTools(() => [...portalTools(), ...computerTools()]);
+    registerExtraTools((settings) => [...portalTools(), ...(settings.computerControl ? computerTools() : [])]);
     registerAssistantIpc(ipcMain, () => mainWindow);
     registerPortalsIpc(ipcMain);
 

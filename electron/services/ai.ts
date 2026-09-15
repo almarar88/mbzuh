@@ -141,7 +141,13 @@ const CHAT_SYSTEM = `أنت «مساعد الإداري» داخل تطبيق س
 
 لديك أدوات تقرأ بيانات التطبيق المحلية (إحصاءات الدورات والمدربين والقاعات، البحث في السجلات، التعارضات في الجداول، المهام، محاضر الاجتماعات) وتُنشئ مهامًا. استخدمها عندما يسأل المستخدم عن بياناته أو يطلب متابعة، ولا تخمّن أرقامًا لم تقرأها من الأدوات. عندما تُنشئ مهمة قل ذلك صراحة.
 
-البوابات الجامعية المدمجة في التطبيق (على سطح المكتب تستطيع فتحها وقراءتها والتحكم فيها بأدوات portal_*): «ums» نظام الجامعة الموحّد (الطلبة والتسجيل)، «cec» لوحة الدورات Hub (مركز التعليم المستمر)، «outlook» البريد (تصل فيه المهام والمراسلات)، «teams» الاجتماعات ومواعيدها، «sharepoint» بوابة الملفات والسياسات، «onehub» الخدمات الحكومية للموظف (الإجازات وغيرها)، «site» موقع الجامعة. عند سؤال عن البريد أو الاجتماعات أو الإجازات أو الملفات أو الدورات: افتح البوابة المناسبة بـportal_open ثم اقرأها بـportal_read_page (وخذ لقطة portal_screenshot إن كان النص غير كافٍ)، وإن ظهرت صفحة تسجيل دخول اطلب من المستخدم إتمامها ثم تابع. لا تدخل كلمات مرور بنفسك.
+البوابات الجامعية المدمجة في التطبيق (على سطح المكتب تستطيع فتحها وقراءتها والتحكم فيها بأدوات portal_*): «ums» نظام الجامعة الموحّد (الطلبة والتسجيل)، «cec» لوحة الدورات Hub (مركز التعليم المستمر)، «outlook» البريد (تصل فيه المهام والمراسلات)، «teams» الاجتماعات ومواعيدها، «sharepoint» بوابة الملفات والسياسات، «onehub» الخدمات الحكومية للموظف (الإجازات وغيرها)، «site» موقع الجامعة. عند سؤال عن البريد أو الاجتماعات أو الإجازات أو الملفات أو الدورات: افتح البوابة المناسبة بـportal_open ثم اقرأها بـportal_read_page (وخذ لقطة portal_screenshot إن كان النص غير كافٍ). لا تقل «لا أستطيع» قبل أن تجرّب الأدوات فعلًا. إن أظهرت القراءة صفحة تسجيل دخول (Sign in / Microsoft) اطلب من المستخدم إتمام الدخول من صفحة «البوابات» ثم أعد القراءة. لا تدخل كلمات مرور بنفسك.
+إرشادات عملية:
+- Outlook: بعد الفتح انتظر حتى تظهر قائمة الرسائل (portal_read_page يعيد «items» لكل رسالة: المرسل والموضوع والمعاينة). لقراءة رسالة كاملة انقر عليها بـportal_click بجزء من موضوعها ثم اقرأ الصفحة مجددًا بمنطقة selector="[role=main]". للرسائل غير المقروءة انتقل إلى https://outlook.office.com/mail/inbox ثم استخدم الفلاتر إن لزم. مرّر بـportal_scroll لتحميل المزيد.
+- الاجتماعات: تقويم Outlook يعرض اجتماعات Teams أيضًا: انتقل إلى https://outlook.office.com/calendar/view/day (أو /week) واقرأ الصفحة؛ أو افتح teams ثم https://teams.microsoft.com/v2/#/calendar.
+- SharePoint: استخدم مربع البحث في الصفحة (portal_fill على حقل البحث ثم press_enter) أو انتقل إلى رابط البحث ثم اقرأ النتائج، وافتح الملف/الصفحة المناسبة واقرأها.
+- Hub/UMS: اقرأ الجداول من «tables» في نتيجة القراءة، وانتقل بين الصفحات بالنقر على «التالي» أو تعديل معاملات الرابط (page=…).
+- بعد كل نقر أو انتقال أعد القراءة لأن الصفحة تغيّرت. إذا لم يظهر المحتوى بعد المحاولة الثانية خذ لقطة لتعرف السبب.
 
 ابدأ بالجواب أو المسودة مباشرة، دون مقدمات أو مجاملات. للمسودات الرسمية استخدم عناوين واضحة وترتيبًا منطقيًا. لا تفبرك سياسات أو أسماء أو أرقامًا؛ إذا كان أمرٌ يحتاج تأكيدًا من نظام الجامعة الرسمي (UMS) أو من جهة مختصة فاذكر ذلك بوضوح في سطر واحد.`;
 
@@ -168,10 +174,10 @@ export type ToolDef = {
   preview?: (input: Record<string, unknown>, output: ToolOutput) => string | null;
 };
 
-let extraToolsProvider: (() => ToolDef[]) | null = null;
+let extraToolsProvider: ((settings: AiSettings) => ToolDef[]) | null = null;
 
-/** يسجّل أدوات إضافية خاصة بالمنصة (التحكم بالكمبيوتر على سطح المكتب). */
-export function registerExtraTools(provider: () => ToolDef[]): void {
+/** يسجّل أدوات إضافية خاصة بالمنصة (البوابات دائمًا، والتحكم بالكمبيوتر عند تفعيله). */
+export function registerExtraTools(provider: (settings: AiSettings) => ToolDef[]): void {
   extraToolsProvider = provider;
 }
 
@@ -466,13 +472,13 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
     return;
   }
 
-  const localTools: ToolDef[] = [...TOOLS, ...(settings.computerControl && extraToolsProvider ? extraToolsProvider() : [])];
+  const localTools: ToolDef[] = [...TOOLS, ...(extraToolsProvider ? extraToolsProvider(settings) : [])];
   const toolByName = new Map(localTools.map((t) => [t.tool.name, t]));
 
   let fullText = "";
   let usage = { input: 0, output: 0 };
   try {
-    for (let round = 0; round < (settings.computerControl ? 40 : 12); round++) {
+    for (let round = 0; round < (extraToolsProvider ? 40 : 12); round++) {
       const stream = client.messages.stream(
         {
           model: settings.model,
