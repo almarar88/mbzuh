@@ -1,0 +1,29 @@
+appId: com.alcode.techpulse
+productName: TechPulse
+copyright: © Alcode — نبض التقنية، أخبار التقنية والذكاء الاصطناعي
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+  - "!**/*.map"
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: TechPulse-${version}-win-${arch}.${ext}
+  executableName: TechPulse
+nsis:
+  artifactName: TechPulse-Setup-${version}.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: نبض التقنية
+  installerLanguages: [ar_SA, en_US]
+  language: 1025
+  deleteAppDataOnUninstall: false

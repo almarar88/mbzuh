@@ -1,0 +1,68 @@
+name: بناء نبض التقنية لويندوز
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "وسم الإصدار الذي سيُنشر (مثال news-v1.0.0)"
+        required: true
+        default: "news-v1.0.0"
+  push:
+    tags:
+      - "news-v*"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: news
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: news/package-lock.json
+
+      - name: تثبيت الاعتماديات
+        run: npm ci
+
+      - name: فحص الأنواع
+        run: npm run typecheck
+
+      - name: بناء ملف التثبيت
+        run: npm run dist:win
+
+      - name: رفع ملف التثبيت كمُخرَج
+        uses: actions/upload-artifact@v4
+        with:
+          name: TechPulse-Setup-Windows
+          path: news/release/TechPulse-Setup-*.exe
+          if-no-files-found: error
+
+      - name: نشر الإصدار
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: نبض التقنية ${{ github.event.inputs.tag || github.ref_name }}
+          files: news/release/TechPulse-Setup-*.exe
+          body: |
+            ## نبض التقنية — أخبار التقنية والذكاء الاصطناعي
+
+            ملف تثبيت لويندوز (64-بت). نزّل `TechPulse-Setup-1.0.0.exe` وشغّله
+            واتبع خطوات التثبيت. يجلب التطبيق الأخبار مباشرة من الإنترنت
+            (خلاصات المواقع، Reddit، X، أخبار Google)، ويترجمها إلى العربية،
+            ويحلّلها بوكيل ذكاء اصطناعي (يحتاج مفتاح Anthropic API من الإعدادات).
+
+            > قد يُظهر ويندوز تنبيه SmartScreen لأن الملف غير موقّع رقميًا —
+            > اختر «مزيد من المعلومات» ثم «تشغيل على أي حال».
+
+            ---
+            تطوير **Alcode**

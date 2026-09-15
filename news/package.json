@@ -1,0 +1,48 @@
+{
+  "name": "techpulse",
+  "productName": "TechPulse",
+  "version": "1.0.0",
+  "description": "نبض التقنية — تطبيق أخبار التقنية والذكاء الاصطناعي مع وكيل تحليل ذكي · تطوير Alcode",
+  "author": {
+    "name": "Alcode",
+    "url": "https://github.com/almarar88"
+  },
+  "private": true,
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build:main": "node scripts/build-main.mjs",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && npm run build:renderer",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "smoke": "node scripts/smoke.mjs",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:dir": "npm run build && electron-builder --win --x64 --dir --publish never",
+    "dist:win:zip": "npm run build && electron-builder --win zip --x64 --publish never"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "@mozilla/readability": "^0.6.0",
+    "fast-xml-parser": "^5.11.1",
+    "linkedom": "^0.18.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/almarar88/mbzuh.git"
+  }
+}
