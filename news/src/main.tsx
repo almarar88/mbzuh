@@ -6,7 +6,7 @@ import "./index.css";
 
 const root = createRoot(document.getElementById("root") as HTMLElement);
 root.render(
-  <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "#8195b0" }}>
+  <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "#8b837b" }}>
     <div style={{ fontSize: 48 }}>⚡</div>
     <div>نبض التقنية — جارٍ التحضير…</div>
   </div>,

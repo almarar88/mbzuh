@@ -128,11 +128,11 @@ function Shell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="flex items-center gap-2 px-2 py-3 mb-2">
-          <div className="text-2xl">⚡</div>
+        <div className="flex items-center gap-3 px-2 py-2 mb-3">
+          <div className="avatar">⚡</div>
           <div>
-            <div className="font-bold text-base leading-tight">نبض التقنية</div>
-            <div className="text-[11px]" style={{ color: "var(--muted)" }}>أخبار التقنية والذكاء الاصطناعي</div>
+            <div className="font-semibold text-[15px] leading-tight">نبض التقنية</div>
+            <div className="text-[11px]" style={{ color: "var(--dark-muted)" }}>تابع وحلّل أخبار التقنية</div>
           </div>
         </div>
         {NAV.map((n) => (
@@ -143,36 +143,46 @@ function Shell() {
             {n.id === "saved" && stats && stats.saved > 0 && <span className="badge badge-muted ms-auto">{stats.saved}</span>}
           </div>
         ))}
-        <div className="mt-auto flex flex-col gap-2 px-1">
-          {progress && (
-            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-              <div className="mb-1 truncate">{progressLabel}</div>
-              <div className="progress"><div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 10}%` }} /></div>
+        <div className="mt-auto flex flex-col gap-3">
+          {stats && (
+            <div className="stat-tile">
+              <div className="flex items-center gap-2">
+                <div className="big">{stats.today}<small>خبر اليوم</small></div>
+                <span className="ms-auto text-lg" style={{ color: "var(--accent)" }}>⚡</span>
+              </div>
+              <div className="text-[11px] mt-2" style={{ color: "var(--dark-muted)" }}>
+                {stats.total} خبر محفوظ · {stats.ai} ذكاء اصطناعي
+                {stats.lastRefreshAt && <> · حُدّث {new Date(stats.lastRefreshAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</>}
+              </div>
+              {progress && (
+                <div className="text-[11px] mt-2" style={{ color: "var(--dark-muted)" }}>
+                  <div className="mb-1 truncate">{progressLabel}</div>
+                  <div className="progress"><div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 10}%` }} /></div>
+                </div>
+              )}
             </div>
           )}
-          <button className="btn btn-primary justify-center" onClick={() => void refresh()} disabled={Boolean(busy)}>
+          <button className="btn btn-accent" onClick={() => void refresh()} disabled={Boolean(busy)}>
             {busy ? <span className="spinner" /> : "🔄"} تحديث الأخبار
           </button>
-          {stats && (
-            <div className="text-[11px] px-1" style={{ color: "var(--muted)" }}>
-              {stats.total} خبر · اليوم {stats.today} · ذكاء اصطناعي {stats.ai}
-            </div>
-          )}
         </div>
       </aside>
       <div className="main-area">
         {/* شريط علوي للهواتف */}
         <div className="topbar">
           {articleId ? (
-            <button className="btn btn-ghost btn-sm" onClick={() => setArticleId(null)}>→ رجوع</button>
+            <button className="btn btn-ghost btn-sm btn-round" onClick={() => setArticleId(null)} title="رجوع">→</button>
           ) : (
-            <div className="flex items-center gap-2"><span className="text-xl">⚡</span><span className="font-bold">{current?.label ?? "نبض التقنية"}</span></div>
+            <div className="avatar" style={{ width: 38, height: 38, fontSize: 18 }}>⚡</div>
           )}
+          <div className="min-w-0">
+            <div className="font-semibold text-[16px] leading-tight truncate">{articleId ? "الخبر" : (current?.label ?? "نبض التقنية")}</div>
+            <div className="text-[11px] truncate" style={{ color: "var(--dark-muted)" }}>{progress ? progressLabel : stats ? `${stats.today} خبر اليوم · ${stats.unread} غير مقروء` : "تابع وحلّل أخبار التقنية"}</div>
+          </div>
           <span className="ms-auto" />
-          {progress && <span className="text-[11px] truncate max-w-40" style={{ color: "var(--muted)" }}>{progressLabel}</span>}
-          <button className="btn btn-ghost btn-sm" onClick={() => void refresh()} disabled={Boolean(busy)} title="تحديث الأخبار">{busy ? <span className="spinner" /> : "🔄"}</button>
+          <button className="btn btn-round" style={{ background: busy ? "var(--dark-2)" : "var(--accent)", color: "#fff" }} onClick={() => void refresh()} disabled={Boolean(busy)} title="تحديث الأخبار">{busy ? <span className="spinner" /> : "🔄"}</button>
         </div>
-        {progress && <div className="progress hide-wide" style={{ borderRadius: 0 }}><div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 10}%` }} /></div>}
+        {progress && <div className="progress hide-wide" style={{ borderRadius: 0, margin: "0 16px" }}><div style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 10}%` }} /></div>}
       <main className="flex-1 min-w-0 overflow-hidden relative">
         {articleId ? (
           <ArticlePage id={articleId} onBack={() => setArticleId(null)} onOpen={openArticle} onAsk={askAgent} onChanged={loadStats} settings={settings} />
@@ -187,7 +197,7 @@ function Shell() {
         )}
         {moreOpen && (
           <div className="absolute inset-0 z-40 hide-wide" style={{ background: "rgb(0 0 0 / .5)" }} onClick={() => setMoreOpen(false)}>
-            <div className="absolute bottom-0 inset-x-0 panel p-3 flex flex-col gap-1" style={{ borderRadius: "16px 16px 0 0" }} onClick={(e) => e.stopPropagation()}>
+            <div className="absolute bottom-0 inset-x-0 panel sheet p-3 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
               {NAV.filter((n) => !PRIMARY_TABS.includes(n.id)).map((n) => (
                 <div key={n.id} className={`nav-item ${page === n.id && !articleId ? "active" : ""}`} onClick={() => { go(n.id); setMoreOpen(false); }}>
                   <span>{n.icon}</span><span>{n.label}</span>

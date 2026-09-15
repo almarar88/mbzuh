@@ -95,8 +95,8 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
     <div className="h-full overflow-y-auto">
       <Lightbox src={lightbox} onClose={() => setLightbox(null)} />
       <div className="max-w-5xl mx-auto page-pad">
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <button className="btn btn-ghost hide-narrow" onClick={onBack}>→ رجوع</button>
+        <div className="filters-row mb-4">
+          <button className="btn btn-round hide-narrow" onClick={onBack} title="رجوع">→</button>
           <span className="ms-auto" />
           {!isAr && (
             <div className="flex gap-1">
@@ -203,23 +203,23 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
           </div>
 
           <aside className="flex flex-col gap-4">
-            <div className="panel p-4">
+            <div className="panel-dark p-5">
               <div className="flex items-center gap-2 mb-3">
-                <div className="font-bold">✨ تحليل الوكيل</div>
+                <div className="text-lg">✨ تحليل الوكيل</div>
                 <span className="ms-auto" />
-                {analysis && <span className="badge badge-muted">{analysis.engine === "llm" ? "بالذكاء الاصطناعي" : "تلخيص محلي"}</span>}
+                {analysis && <span className="badge" style={{ background: "var(--dark-2)", color: "var(--dark-muted)" }}>{analysis.engine === "llm" ? "بالذكاء الاصطناعي" : "تلخيص محلي"}</span>}
               </div>
               {!analysis ? (
-                <div className="text-sm" style={{ color: "var(--muted)" }}>
+                <div className="text-sm" style={{ color: "var(--dark-muted)" }}>
                   <p className="mb-3">احصل على ملخص عربي، النقاط الرئيسية، ولماذا يهم هذا الخبر.</p>
-                  <button className="btn btn-primary w-full justify-center" onClick={() => void analyze(false)} disabled={Boolean(busy)}>حلّل الخبر</button>
+                  <button className="btn btn-accent w-full" onClick={() => void analyze(false)} disabled={Boolean(busy)}>حلّل الخبر</button>
                   {!settings?.anthropicApiKey && <p className="mt-2 text-[11px]">بلا مفتاح API يُستخدم تلخيص استخلاصي محلي. أضف مفتاح Anthropic من الإعدادات لتحليل أعمق.</p>}
                 </div>
               ) : (
                 <div className="text-sm flex flex-col gap-3">
                   <div className="flex gap-2 flex-wrap text-[11px]">
-                    <span className="badge" style={{ background: "var(--panel-2)", color: CONFIDENCE[analysis.confidence].color }}>● {CONFIDENCE[analysis.confidence].label}</span>
-                    <span className="badge badge-muted">النبرة: {SENTIMENT[analysis.sentiment]}</span>
+                    <span className="badge" style={{ background: "var(--dark-2)", color: CONFIDENCE[analysis.confidence].color }}>● {CONFIDENCE[analysis.confidence].label}</span>
+                    <span className="badge" style={{ background: "var(--dark-2)", color: "var(--dark-muted)" }}>النبرة: {SENTIMENT[analysis.sentiment]}</span>
                   </div>
                   {analysis.summary && <p className="leading-relaxed" dir="auto">{analysis.summary}</p>}
                   {analysis.keyPoints.length > 0 && (
@@ -238,13 +238,13 @@ export function ArticlePage({ id, onBack, onOpen, onAsk, onChanged, settings }: 
                   )}
                   {analysis.entities.length > 0 && (
                     <div className="flex gap-1 flex-wrap">
-                      {analysis.entities.map((e) => <span key={e} className="badge badge-muted">{e}</span>)}
+                      {analysis.entities.map((e) => <span key={e} className="badge" style={{ background: "var(--dark-2)", color: "var(--dark-ink)" }}>{e}</span>)}
                     </div>
                   )}
-                  <button className="btn btn-sm" onClick={() => void analyze(true)} disabled={Boolean(busy)}>إعادة التحليل</button>
+                  <button className="btn btn-sm" style={{ background: "var(--dark-2)", color: "var(--dark-ink)" }} onClick={() => void analyze(true)} disabled={Boolean(busy)}>إعادة التحليل</button>
                 </div>
               )}
-              <button className="btn w-full justify-center mt-3" onClick={() => onAsk(`حلّل هذا الخبر بالتفصيل (المعرّف #${a.id}): «${a.titleAr || a.title}». ابحث عن تغطيات أخرى وردود الفعل على Reddit وX، وقارن المصادر، وبيّن ما هو مؤكد وما هو تخمين.`)}>
+              <button className="btn w-full mt-3" style={{ background: "var(--dark-2)", color: "var(--dark-ink)" }} onClick={() => onAsk(`حلّل هذا الخبر بالتفصيل (المعرّف #${a.id}): «${a.titleAr || a.title}». ابحث عن تغطيات أخرى وردود الفعل على Reddit وX، وقارن المصادر، وبيّن ما هو مؤكد وما هو تخمين.`)}>
                 اسأل الوكيل عن هذا الخبر ✨
               </button>
             </div>

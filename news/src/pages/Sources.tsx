@@ -75,7 +75,7 @@ export function SourcesPage({ onRefreshed }: { onRefreshed: () => void }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-5xl mx-auto page-pad">
-        <h1 className="text-xl font-bold mb-1">المصادر</h1>
+        <h1 className="text-2xl mb-1">المصادر</h1>
         <div className="text-xs mb-5" style={{ color: "var(--muted)" }}>الأخبار تُجلب مباشرة من هذه المصادر. المصادر غير التقنية (مثل أخبار Google العامة) تُفلتر آليًا لتبقى الأخبار التقنية فقط.</div>
 
         <div className="panel p-4 mb-6">
@@ -105,7 +105,7 @@ export function SourcesPage({ onRefreshed }: { onRefreshed: () => void }) {
           </div>
           <div className="flex items-center gap-4 mt-3 flex-wrap">
             <Toggle on={form.techOnly} onChange={(v) => setForm({ ...form, techOnly: v })} label="مصدر تقني بالكامل (لا يُفلتر)" />
-            <button className="btn btn-primary ms-auto" onClick={() => void add()}>إضافة واختبار</button>
+            <button className="btn btn-accent ms-auto" onClick={() => void add()}>إضافة واختبار</button>
           </div>
         </div>
 
@@ -124,9 +124,9 @@ export function SourcesPage({ onRefreshed }: { onRefreshed: () => void }) {
                 {kind === "reddit" && (
                   <div className="text-[11px] mb-2" style={{ color: "var(--muted)" }}>يُستخدم JSON العام لـ Reddit ثم خلاصة RSS كبديل. قد يُحدّ الطلب مؤقتًا عند التحديث المتكرر.</div>
                 )}
-                <div className="panel overflow-hidden">
+                <div className="flex flex-col gap-2">
                   {list.map((s) => (
-                    <div key={s.id} className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: "1px solid var(--border)", opacity: s.enabled ? 1 : 0.55 }}>
+                    <div key={s.id} className="source-row" style={{ opacity: s.enabled ? 1 : 0.55 }}>
                       <Toggle on={Boolean(s.enabled)} onChange={(v) => void toggle(s, v)} />
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium truncate">{s.name} <span className="badge badge-muted">{s.lang === "ar" ? "عربي" : "إنجليزي"}</span> {!s.techOnly && <span className="badge badge-muted">مُفلتر</span>}</div>

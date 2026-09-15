@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   refreshMinutes: 30,
   xBearerToken: "",
   useServerWebSearch: true,
-  theme: "dark",
+  theme: "light",
   maxArticleAgeDays: 30,
 };
 

@@ -93,10 +93,10 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
-    minWidth: 1024,
-    minHeight: 680,
+    minWidth: 360,
+    minHeight: 600,
     title: "نبض التقنية — أخبار التقنية والذكاء الاصطناعي",
-    backgroundColor: "#0b1220",
+    backgroundColor: "#e7e2da",
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -130,6 +130,8 @@ function createWindow(): void {
   // وضع الفحص الذاتي: يلتقط صورًا لكل الشاشات ثم يخرج (يُستخدم في الاختبارات فقط).
   const shotDir = process.env.TECHPULSE_SCREENSHOT_DIR;
   if (shotDir) {
+    const size = /^(\d+)x(\d+)$/.exec(process.env.TECHPULSE_SCREENSHOT_SIZE ?? "");
+    if (size) mainWindow.setSize(Number(size[1]), Number(size[2]));
     mainWindow.webContents.once("did-finish-load", () => {
       void (async () => {
         const fs = await import("node:fs");

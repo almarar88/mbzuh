@@ -42,7 +42,7 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
     <div className="h-full overflow-y-auto">
       <div className="max-w-3xl mx-auto page-pad flex flex-col gap-5">
         <div>
-          <h1 className="text-xl font-bold">الإعدادات</h1>
+          <h1 className="text-2xl">الإعدادات</h1>
           <div className="text-xs" style={{ color: "var(--muted)" }}>كل الإعدادات محلية على جهازك. المفاتيح تُستخدم فقط للاتصال بالخدمة المعنية.</div>
         </div>
 
@@ -115,13 +115,13 @@ export function SettingsPage({ onSaved }: { onSaved: (s: Settings) => void }) {
         <section className="panel p-5 flex flex-col gap-4">
           <div className="font-bold">🎨 المظهر</div>
           <div className="flex gap-2">
+            <button className={`chip ${s.theme === "light" ? "active" : ""}`} onClick={() => patch({ theme: "light" })}>☀️ كريمي (افتراضي)</button>
             <button className={`chip ${s.theme === "dark" ? "active" : ""}`} onClick={() => patch({ theme: "dark" })}>🌙 داكن</button>
-            <button className={`chip ${s.theme === "light" ? "active" : ""}`} onClick={() => patch({ theme: "light" })}>☀️ فاتح</button>
           </div>
         </section>
 
         <div className="flex gap-2 justify-end sticky bottom-0 py-3" style={{ background: "var(--bg)" }}>
-          <button className="btn btn-primary" onClick={() => void save()} disabled={saving}>{saving ? <span className="spinner" /> : "💾"} حفظ الإعدادات</button>
+          <button className="btn btn-accent" onClick={() => void save()} disabled={saving}>{saving ? <span className="spinner" /> : "💾"} حفظ الإعدادات</button>
         </div>
       </div>
     </div>

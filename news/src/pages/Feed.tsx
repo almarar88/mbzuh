@@ -76,10 +76,10 @@ export function FeedPage({ mode, version, onOpen, onChanged }: { mode: Page; ver
 
   return (
     <div className="h-full flex flex-col">
-      <header className="page-pad pt-4 pb-3 flex flex-col gap-3" style={{ borderBottom: "1px solid var(--border)" }}>
+      <header className="page-pad pt-5 pb-3 flex flex-col gap-3">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="hide-narrow">
-            <h1 className="text-xl font-bold">{t.title}</h1>
+            <h1 className="text-2xl">{t.title}</h1>
             <div className="text-xs" style={{ color: "var(--muted)" }}>{t.hint}</div>
           </div>
           <div className="ms-auto w-80 max-w-full flex-1 md:flex-none">
@@ -94,7 +94,7 @@ export function FeedPage({ mode, version, onOpen, onChanged }: { mode: Page; ver
                   {c === "all" ? "الكل" : c === "ai" ? "🤖 ذكاء اصطناعي" : "💻 تقنية"}
                 </button>
               ))}
-              <span className="mx-1" style={{ color: "var(--border)" }}>|</span>
+                  <span className="mx-1 hide-narrow" style={{ color: "var(--border)" }}>|</span>
             </>
           )}
           {socialKinds.map((k) => (
@@ -114,7 +114,7 @@ export function FeedPage({ mode, version, onOpen, onChanged }: { mode: Page; ver
           <Empty title={search ? "لا نتائج مطابقة" : mode === "saved" ? "لا محفوظات بعد" : "لا أخبار بعد"} hint={search ? "جرّب كلمات أخرى، أو اسأل الوكيل الذكي ليبحث في الويب." : "اضغط «تحديث الأخبار» لجلب أحدث الأخبار من المصادر."} />
         ) : (
           <>
-            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+            <div className="feed-grid">
               {items.map((a) => (
                 <ArticleCard key={a.id} a={a} onOpen={onOpen} onSave={save} />
               ))}

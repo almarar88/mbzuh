@@ -184,7 +184,7 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
     <div className="agent-layout">
       <div className={`conv-list ${listOpen ? "open" : ""}`}>
         <div className="flex gap-2">
-          <button className="btn btn-primary justify-center flex-1" onClick={() => { setActive(null); setMessages([]); setLive(null); setListOpen(false); }}>＋ محادثة جديدة</button>
+          <button className="btn btn-accent flex-1" onClick={() => { setActive(null); setMessages([]); setLive(null); setListOpen(false); }}>＋ محادثة جديدة</button>
           <button className="btn hide-wide" onClick={() => setListOpen(false)}>✕</button>
         </div>
         <div className="flex-1 overflow-y-auto flex flex-col gap-1 mt-1">
@@ -229,7 +229,7 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
                 <div key={m.id} className={`${m.role === "user" ? "msg-user self-start max-w-[85%]" : "msg-assistant"} p-4`}>
                   {m.role === "assistant" && renderCalls(m.toolCalls)}
                   {m.role === "user" ? <div className="whitespace-pre-wrap text-[14.5px]" dir="auto">{m.content}</div> : renderMd(m.content)}
-                  <div className="text-[10px] mt-2" style={{ color: "var(--muted)" }}>{timeAgo(m.createdAt)}</div>
+                  <div className="text-[10px] mt-2" style={{ color: m.role === "user" ? "var(--dark-muted)" : "var(--muted)" }}>{timeAgo(m.createdAt)}</div>
                 </div>
               ))}
               {live && (
@@ -262,7 +262,7 @@ export function AgentPage({ prefill, onPrefillConsumed, onOpenArticle, onGoSetti
               }}
               disabled={Boolean(live)}
             />
-            <button className="btn btn-primary" style={{ height: 44 }} onClick={() => void send()} disabled={Boolean(live) || !input.trim()}>إرسال</button>
+            <button className="btn btn-accent" style={{ height: 46 }} onClick={() => void send()} disabled={Boolean(live) || !input.trim()}>إرسال</button>
           </div>
         </div>
       </div>
