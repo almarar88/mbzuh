@@ -8,7 +8,11 @@ import { registerLogisticsIpc } from "./ipc/logistics";
 import { registerAcademicsIpc } from "./ipc/academics";
 import { registerWorkspaceIpc } from "./ipc/workspace";
 import { registerAssistantIpc } from "./ipc/assistant";
-import { ums } from "./services/ums";
+import { registerPortalsIpc } from "./ipc/portals";
+import { registerExtraTools } from "./services/ai";
+import { computerTools } from "./services/computer";
+import { portalTools } from "./services/portal-tools";
+import { portals } from "./services/portals";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 const APP_TITLE = "منصّة الإداري — جامعة محمد بن زايد للعلوم الإنسانية";
@@ -37,7 +41,7 @@ function buildMenu(): void {
       label: "الوحدات",
       submenu: [
         { label: "الرئيسية", accelerator: "CmdOrCtrl+1", click: () => send("app:navigate", "dashboard") },
-        { label: "نظام الجامعة الموحّد UMS", accelerator: "CmdOrCtrl+2", click: () => send("app:navigate", "ums") },
+        { label: "البوابات الجامعية", accelerator: "CmdOrCtrl+2", click: () => send("app:navigate", "portals") },
         { label: "المساعد الذكي", accelerator: "CmdOrCtrl+3", click: () => send("app:navigate", "assistant") },
         { label: "لوحة المهام", accelerator: "CmdOrCtrl+4", click: () => send("app:navigate", "tasks") },
         { type: "separator" },
@@ -48,7 +52,7 @@ function buildMenu(): void {
         { label: "الشركاء الخارجيون", click: () => send("app:navigate", "partners") },
         { label: "الطلبة والحضور", click: () => send("app:navigate", "students") },
         { label: "التقارير والإحصائيات", click: () => send("app:navigate", "reports") },
-        { label: "محاضر الاجتماعات", click: () => send("app:navigate", "minutes") },
+        { label: "المحاضر والملاحظات", click: () => send("app:navigate", "minutes") },
         { type: "separator" },
         { label: "الإعدادات", accelerator: "CmdOrCtrl+,", click: () => send("app:navigate", "settings") },
       ],
@@ -68,7 +72,7 @@ function buildMenu(): void {
     {
       label: "مساعدة",
       submenu: [
-        { label: "فتح UMS في المتصفح", click: () => ums.openExternal() },
+        { label: "فتح البوابة الحالية في المتصفح", click: () => portals.openExternal() },
         { label: "موقع الجامعة", click: () => void shell.openExternal("https://mbzuh.ac.ae") },
         { type: "separator" },
         {
@@ -80,8 +84,8 @@ function buildMenu(): void {
               message: APP_TITLE,
               detail:
                 `الإصدار ${app.getVersion()} — تطوير Alcode\n\n` +
-                "تطبيق سطح مكتب يجمع لوحة نظام الجامعة الموحّد (UMS) بمظهر حديث، ومساعدًا ذكيًا " +
-                "للمهام الإدارية، ولوحة مهام، ووحدات إدارة الدورات والمدربين والقاعات والتقارير والمحاضر.\n\n" +
+                "منصّة لكل إداريي الجامعة: البوابات (UMS، لوحة الدورات Hub، Outlook، Teams، SharePoint، OneHub) بمظهر حديث، ومساعد ذكي " +
+                "يقرأ الأنظمة ويتحكم فيها وفي الكمبيوتر، ولوحة مهام، ومحاضر وملاحظات، ووحدات إدارة الدورات.\n\n" +
                 "بياناتك محلية على هذا الجهاز؛ لا يُرسل شيء لأي خادم سوى طلبات المساعد إلى Claude API عند استخدامه.",
               buttons: ["حسنًا"],
             });
@@ -131,7 +135,7 @@ function createWindow(): void {
     if (!(devUrl && url.startsWith(devUrl))) event.preventDefault();
   });
 
-  ums.attach(mainWindow);
+  portals.attach(mainWindow);
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -163,7 +167,9 @@ if (!app.requestSingleInstanceLock()) {
     registerLogisticsIpc(ipcMain);
     registerAcademicsIpc(ipcMain);
     registerWorkspaceIpc(ipcMain);
+    registerExtraTools(() => [...portalTools(), ...computerTools()]);
     registerAssistantIpc(ipcMain, () => mainWindow);
+    registerPortalsIpc(ipcMain);
 
     buildMenu();
     createWindow();

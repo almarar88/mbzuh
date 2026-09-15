@@ -139,7 +139,7 @@ export default function TasksPage({ newTaskSignal, onNavigate }: { newTaskSignal
         </div>
       )}
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+      <div className="kanban-grid">
         {COLUMNS.map((col) => {
           const items = byStatus(col.id);
           return (

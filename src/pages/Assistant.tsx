@@ -12,11 +12,13 @@ import type { PageId } from "../App";
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 const SUGGESTIONS = [
-  "ما وضع الدورات الجارية اليوم؟ وهل توجد تعارضات تحتاج تدخلي؟",
-  "لخّص لي آخر ثلاثة محاضر واستخرج ما عليّ متابعته.",
-  "أضف مهمة: مراجعة جدول القاعات للأسبوع القادم، أولوية عالية، استحقاق الخميس.",
-  "اقترح خطة لهذا الأسبوع بناءً على مهامي المفتوحة والمواعيد القادمة.",
+  "افتح بريد Outlook ولخّص أهم الرسائل غير المقروءة، وحوّل ما فيها من طلبات إلى مهام.",
+  "ما اجتماعاتي اليوم وغدًا في Teams؟",
+  "افتح لوحة الدورات Hub واعرض لي آخر الدورات وحالتها.",
+  "ابحث في SharePoint عن سياسة الإجازات ولخّصها لي.",
+  "ما رصيد إجازاتي في OneHub؟",
   "اكتب مذكرة داخلية لطلب اعتماد قاعة إضافية بسبب ارتفاع أعداد المسجلين.",
+  "اقترح خطة لهذا الأسبوع بناءً على مهامي المفتوحة.",
 ];
 
 const TOOL_CARDS: { id: AiTemplateId; label: string; desc: string; icon: string }[] = [
@@ -35,13 +37,9 @@ function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
 }
 
-export default function AssistantPage({
-  onNavigate,
-  initialPrompt,
-}: {
-  onNavigate: (page: PageId) => void;
-  initialPrompt?: string;
-}) {
+type Navigate = (page: PageId, id?: number, q?: string) => void;
+
+export default function AssistantPage({ onNavigate, initialPrompt }: { onNavigate: Navigate; initialPrompt?: string }) {
   const [tab, setTab] = useState<"chat" | "tools">("chat");
   const [settings, setSettings] = useState<AiSettings | null>(null);
 
@@ -63,14 +61,34 @@ export default function AssistantPage({
             مساعد تنفيذي يقرأ بيانات التطبيق ويُنشئ المهام ويصوغ المراسلات — مدعوم بـClaude.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {settings && (
             <span className={`badge ${settings.hasKey ? "badge-ok" : "badge-warn"}`}>
               {settings.hasKey ? `متصل · ${settings.model}` : "لم يُضبط مفتاح API"}
             </span>
           )}
+          {settings?.computerAvailable && (
+            <button
+              className={`chip ${settings.computerControl ? "on" : ""}`}
+              style={settings.computerControl ? { background: "var(--c-purple)", color: "var(--c-purple-ink)", borderColor: "transparent" } : undefined}
+              title="السماح للمساعد بفتح البرامج والتحكم بالشاشة والبوابات"
+              onClick={async () => setSettings(await api.ai.setPrefs({ computerControl: !settings.computerControl }))}
+            >
+              <Icon name="monitor" size={14} /> التحكم بالكمبيوتر {settings.computerControl ? "مفعّل" : "متوقف"}
+            </button>
+          )}
+          {settings && (
+            <button
+              className="chip"
+              style={settings.webSearch ? { background: "var(--c-lime)", color: "var(--c-lime-ink)", borderColor: "transparent" } : undefined}
+              title="البحث في الإنترنت"
+              onClick={async () => setSettings(await api.ai.setPrefs({ webSearch: !settings.webSearch }))}
+            >
+              <Icon name="globe" size={14} /> الإنترنت {settings.webSearch ? "مفعّل" : "متوقف"}
+            </button>
+          )}
           <Button size="sm" onClick={() => onNavigate("settings")}>
-            <Icon name="settings" size={14} /> إعدادات المساعد
+            <Icon name="settings" size={14} /> الإعدادات
           </Button>
         </div>
       </div>
@@ -109,7 +127,7 @@ export default function AssistantPage({
 
 /* ------------------------------ المحادثة ------------------------------ */
 
-function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNavigate: (p: PageId) => void }) {
+function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNavigate: Navigate }) {
   const { toast, confirm } = useUi();
   const [chatId, setChatId] = useState(() => uid());
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
@@ -158,8 +176,10 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
           }
           next[next.length - 1] = { ...last, tools };
         }
-        if (ev.type === "error" || ev.type === "refusal") next[next.length - 1] = { ...last, error: ev.message };
-        if (ev.type === "done") next[next.length - 1] = { ...last, text: ev.text || last.text };
+        if (ev.type === "approval") next[next.length - 1] = { ...last, approval: { requestId: ev.requestId, label: ev.label, detail: ev.detail } };
+        if (ev.type === "screenshot") next[next.length - 1] = { ...last, shots: [...(last.shots ?? []), { dataUrl: ev.dataUrl, label: ev.label }].slice(-6) };
+        if (ev.type === "error" || ev.type === "refusal") next[next.length - 1] = { ...last, error: ev.message, approval: undefined };
+        if (ev.type === "done") next[next.length - 1] = { ...last, text: ev.text || last.text, approval: undefined };
         return next;
       });
       if (ev.type === "done" || ev.type === "error" || ev.type === "refusal") {
@@ -198,6 +218,11 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
 
   const cancel = async () => {
     if (jobRef.current) await api.ai.cancel(jobRef.current);
+  };
+
+  const decide = async (messageId: string, requestId: string, ok: boolean) => {
+    setMessages((list) => list.map((m) => (m.id === messageId && m.approval ? { ...m, approval: { ...m.approval, decided: true } } : m)));
+    await api.ai.approve(requestId, ok);
   };
 
   const newChat = () => {
@@ -317,6 +342,31 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
                   ))}
                 </div>
               )}
+              {m.role === "assistant" && (m.shots ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2 justify-end" style={{ maxWidth: "82%" }}>
+                  {(m.shots ?? []).map((sh, k) => (
+                    <img key={k} src={sh.dataUrl} alt={sh.label} title={sh.label} className="shot" onClick={() => window.open(sh.dataUrl, "_blank")} />
+                  ))}
+                </div>
+              )}
+              {m.role === "assistant" && m.approval && !m.approval.decided && (
+                <div className="approval-card mb-2 pop" style={{ maxWidth: "82%" }}>
+                  <div className="font-bold text-sm mb-1 flex items-center gap-2">
+                    <Icon name="shield" size={15} style={{ color: "var(--warn)" }} /> يطلب المساعد الإذن: {m.approval.label}
+                  </div>
+                  <pre className="text-xs whitespace-pre-wrap mb-2" style={{ color: "var(--ink-2)", fontFamily: "inherit" }}>
+                    {m.approval.detail}
+                  </pre>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="primary" onClick={() => void decide(m.id, m.approval!.requestId, true)}>
+                      <Icon name="check" size={14} /> موافق، نفّذ
+                    </Button>
+                    <Button size="sm" onClick={() => void decide(m.id, m.approval!.requestId, false)}>
+                      <Icon name="x" size={14} /> رفض
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div
                 className={`bubble ${m.role === "user" ? "bubble-user" : "bubble-assistant"} ${
                   m.role === "assistant" && running && i === messages.length - 1 && !m.error ? "cursor-blink" : ""
@@ -389,7 +439,7 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
 
 type ToolOptions = Record<string, string>;
 
-function ToolsPane({ onNavigate }: { onNavigate: (p: PageId) => void }) {
+function ToolsPane({ onNavigate }: { onNavigate: Navigate }) {
   const { toast } = useUi();
   const [active, setActive] = useState<AiTemplateId>("letter");
   const [text, setText] = useState("");
@@ -456,6 +506,24 @@ function ToolsPane({ onNavigate }: { onNavigate: (p: PageId) => void }) {
   return (
     <div className="grid gap-4 flex-1 min-h-0" style={{ gridTemplateColumns: "300px 1fr" }}>
       <div className="grid gap-2 content-start stagger">
+        <div className="panel p-3" style={{ borderRadius: 20 }}>
+          <div className="text-[12px] font-extrabold mb-2" style={{ color: "var(--muted)" }}>
+            مهام البوابات (عبر المحادثة)
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {[
+              { l: "ملخص بريد Outlook → مهام", q: "افتح Outlook، اقرأ الرسائل غير المقروءة، لخّصها، وأنشئ مهمة لكل طلب فيها." },
+              { l: "اجتماعات Teams اليوم", q: "افتح Teams واعرض اجتماعاتي اليوم مع أوقاتها، ثم أضف تذكيرًا كمهمة لكل اجتماع مهم." },
+              { l: "حالة الدورات في Hub", q: "افتح لوحة الدورات Hub واستخرج جدولًا بالدورات الحالية وحالتها وأعداد المسجلين." },
+              { l: "بحث في SharePoint", q: "ابحث في بوابة SharePoint عن: " },
+              { l: "طلب إجازة عبر OneHub", q: "ساعدني خطوة بخطوة في تقديم طلب إجازة في OneHub. افتح البوابة واقرأ الصفحة أولًا." },
+            ].map((x) => (
+              <button key={x.l} className="chip justify-start" onClick={() => onNavigate("assistant", undefined, x.q)} title={x.q}>
+                <Icon name="globe" size={12} /> {x.l}
+              </button>
+            ))}
+          </div>
+        </div>
         {TOOL_CARDS.map((c) => (
           <button key={c.id} className={`tool-card ${active === c.id ? "on" : ""}`} onClick={() => setActive(c.id)} style={{ padding: "10px 12px" }}>
             <div className="flex items-center gap-3">

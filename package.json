@@ -1,7 +1,7 @@
 {
   "name": "mbzuh-admin",
   "productName": "MBZUH Admin",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "منصّة الإداري — جامعة محمد بن زايد للعلوم الإنسانية · تطبيق ويندوز بأدوات ذكاء اصطناعي ولوحة UMS مدمجة · تطوير Alcode",
   "author": {
     "name": "Alcode",
@@ -15,10 +15,12 @@
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "icon": "node scripts/make-icon.mjs",
+    "icon": "node scripts/make-icon.mjs && node scripts/android-icons.mjs",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
     "dist:dir": "npm run build && electron-builder --win --x64 --dir --publish never",
-    "dist:win:zip": "npm run build && electron-builder --win zip --x64 --publish never"
+    "dist:win:zip": "npm run build && electron-builder --win zip --x64 --publish never",
+    "build:mobile": "vite build -c vite.mobile.config.ts",
+    "dev:mobile": "vite -c vite.mobile.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -28,6 +30,7 @@
     "@tailwindcss/vite": "^4.1.11",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^38.0.0",
     "electron-builder": "^26.0.12",
@@ -35,6 +38,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "sharp": "^0.35.4",
+    "sql.js": "^1.14.2",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3",
     "vite": "^7.0.0"

@@ -26,6 +26,14 @@ import type {
 } from "../../shared/types";
 
 const DEFAULT_MODEL = "claude-opus-5";
+const IS_BROWSER = typeof (globalThis as { document?: unknown }).document !== "undefined";
+const PLATFORM: AiSettings["platform"] = IS_BROWSER
+  ? "mobile"
+  : process.platform === "win32"
+    ? "windows"
+    : process.platform === "darwin"
+      ? "mac"
+      : "linux";
 const KEY_SETTING = "ai_api_key";
 const KEY_ENC_SETTING = "ai_api_key_enc";
 
@@ -70,6 +78,12 @@ export function getAiSettings(): AiSettings {
     adminName: getSetting("ai_admin_name", ""),
     adminTitle: getSetting("ai_admin_title", ""),
     encrypted: getSetting(KEY_ENC_SETTING, "").length > 0,
+    computerControl: getSetting("ai_computer", "0") === "1" && extraToolsProvider !== null,
+    computerAvailable: extraToolsProvider !== null,
+    webSearch: getSetting("ai_web", "1") === "1",
+    confirmCommands: getSetting("ai_confirm_cmd", "1") === "1",
+    confirmGui: getSetting("ai_confirm_gui", "0") === "1",
+    platform: PLATFORM,
   };
 }
 
@@ -78,7 +92,7 @@ function getClient(): Anthropic {
   if (!apiKey) {
     throw new Error("لم يُضبط مفتاح Claude API بعد. أضفه من الإعدادات ← المساعد الذكي.");
   }
-  return new Anthropic({ apiKey, maxRetries: 2, timeout: 10 * 60 * 1000 });
+  return new Anthropic({ apiKey, maxRetries: 2, timeout: 10 * 60 * 1000, dangerouslyAllowBrowser: IS_BROWSER });
 }
 
 /** معاملات التفكير والجهد حسب النموذج (Haiku 4.5 لا يدعم التفكير التكيفي ولا effort). */
@@ -127,11 +141,80 @@ const CHAT_SYSTEM = `أنت «مساعد الإداري» داخل تطبيق س
 
 لديك أدوات تقرأ بيانات التطبيق المحلية (إحصاءات الدورات والمدربين والقاعات، البحث في السجلات، التعارضات في الجداول، المهام، محاضر الاجتماعات) وتُنشئ مهامًا. استخدمها عندما يسأل المستخدم عن بياناته أو يطلب متابعة، ولا تخمّن أرقامًا لم تقرأها من الأدوات. عندما تُنشئ مهمة قل ذلك صراحة.
 
+البوابات الجامعية المدمجة في التطبيق (على سطح المكتب تستطيع فتحها وقراءتها والتحكم فيها بأدوات portal_*): «ums» نظام الجامعة الموحّد (الطلبة والتسجيل)، «cec» لوحة الدورات Hub (مركز التعليم المستمر)، «outlook» البريد (تصل فيه المهام والمراسلات)، «teams» الاجتماعات ومواعيدها، «sharepoint» بوابة الملفات والسياسات، «onehub» الخدمات الحكومية للموظف (الإجازات وغيرها)، «site» موقع الجامعة. عند سؤال عن البريد أو الاجتماعات أو الإجازات أو الملفات أو الدورات: افتح البوابة المناسبة بـportal_open ثم اقرأها بـportal_read_page (وخذ لقطة portal_screenshot إن كان النص غير كافٍ)، وإن ظهرت صفحة تسجيل دخول اطلب من المستخدم إتمامها ثم تابع. لا تدخل كلمات مرور بنفسك.
+
 ابدأ بالجواب أو المسودة مباشرة، دون مقدمات أو مجاملات. للمسودات الرسمية استخدم عناوين واضحة وترتيبًا منطقيًا. لا تفبرك سياسات أو أسماء أو أرقامًا؛ إذا كان أمرٌ يحتاج تأكيدًا من نظام الجامعة الرسمي (UMS) أو من جهة مختصة فاذكر ذلك بوضوح في سطر واحد.`;
+
+const COMPUTER_SYSTEM = `
+
+وضع «التحكم بالكمبيوتر» مفعّل: لديك أدوات لفتح البرامج والملفات والروابط، ورؤية الشاشة (لقطة شاشة)، والنقر بالفأرة والكتابة بلوحة المفاتيح، والتبديل بين النوافذ، وتنفيذ أوامر PowerShell، وقراءة الحافظة والملفات. اتبع هذا الأسلوب:
+- قبل أي نقر أو كتابة خذ لقطة شاشة لتعرف ما على الشاشة، ونفّذ خطوة واحدة ثم تحقق بلقطة جديدة عند الحاجة. الإحداثيات التي تُعطيها للنقر هي إحداثيات اللقطة نفسها.
+- فضّل الطرق المباشرة والآمنة: افتح البرنامج باسمه، أو الملف بمساره، أو الرابط، بدل النقر على الأيقونات إن أمكن.
+- لا تنفّذ إجراءً لا رجعة فيه (حذف، إرسال، دفع، تغيير إعدادات نظام) دون أن تذكره صراحة وتحصل على موافقة المستخدم. لا تكتب كلمات مرور ولا تتجاوز شاشات الأمان.
+- بعد الانتهاء لخّص ما فعلته في سطرين.`;
 
 /* ------------------------------ الأدوات ------------------------------ */
 
-type ToolDef = { tool: Anthropic.Tool; label: string; run: (input: Record<string, unknown>) => unknown };
+/** نتيجة أداة قد تكون قيمة عادية (تُحوَّل إلى JSON) أو كتل محتوى جاهزة (نص + صور). */
+export type ToolOutput = unknown | { __blocks: Anthropic.ToolResultBlockParam["content"] };
+
+export type ToolDef = {
+  tool: Anthropic.Tool;
+  label: string;
+  run: (input: Record<string, unknown>) => ToolOutput | Promise<ToolOutput>;
+  /** إن أعادت نصًا، يُطلب من المستخدم تأكيد الإجراء قبل التنفيذ. */
+  approval?: (input: Record<string, unknown>, settings: AiSettings) => string | null;
+  /** يُلتقط ويُرسل للواجهة كصورة (مثل لقطات الشاشة). */
+  preview?: (input: Record<string, unknown>, output: ToolOutput) => string | null;
+};
+
+let extraToolsProvider: (() => ToolDef[]) | null = null;
+
+/** يسجّل أدوات إضافية خاصة بالمنصة (التحكم بالكمبيوتر على سطح المكتب). */
+export function registerExtraTools(provider: () => ToolDef[]): void {
+  extraToolsProvider = provider;
+}
+
+/* ------------------------------ الموافقات ------------------------------ */
+
+type ApprovalEmit = (event: AiStreamEvent) => void;
+let approvalEmit: ApprovalEmit | null = null;
+const pendingApprovals = new Map<string, (ok: boolean) => void>();
+
+export function setApprovalHandler(emit: ApprovalEmit): void {
+  approvalEmit = emit;
+}
+
+export function resolveApproval(requestId: string, ok: boolean): boolean {
+  const fn = pendingApprovals.get(requestId);
+  if (!fn) return false;
+  pendingApprovals.delete(requestId);
+  fn(ok);
+  return true;
+}
+
+function requestApproval(jobId: string, label: string, detail: string, signal: AbortSignal): Promise<boolean> {
+  if (!approvalEmit) return Promise.resolve(false);
+  const requestId = `${jobId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      pendingApprovals.delete(requestId);
+      resolve(false);
+    }, 180_000);
+    const onAbort = () => {
+      pendingApprovals.delete(requestId);
+      clearTimeout(timer);
+      resolve(false);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    pendingApprovals.set(requestId, (ok) => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      resolve(ok);
+    });
+    approvalEmit!({ jobId, type: "approval", requestId, label, detail });
+  });
+}
 
 const PRIORITIES: TaskPriority[] = ["low", "normal", "high", "urgent"];
 
@@ -283,7 +366,20 @@ const TOOLS: ToolDef[] = [
   },
 ];
 
-const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.tool.name, t]));
+/** أدوات الخادم (بحث وقراءة صفحات) حسب إعداد المستخدم ونوع النموذج. */
+function serverTools(settings: AiSettings): Anthropic.Messages.ToolUnion[] {
+  if (!settings.webSearch) return [];
+  if (settings.model.startsWith("claude-haiku")) {
+    return [
+      { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+      { type: "web_fetch_20250910", name: "web_fetch", max_uses: 5 },
+    ];
+  }
+  return [
+    { type: "web_search_20260209", name: "web_search", max_uses: 5 },
+    { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5 },
+  ];
+}
 
 /* ------------------------------ المحادثة ------------------------------ */
 
@@ -370,19 +466,22 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
     return;
   }
 
+  const localTools: ToolDef[] = [...TOOLS, ...(settings.computerControl && extraToolsProvider ? extraToolsProvider() : [])];
+  const toolByName = new Map(localTools.map((t) => [t.tool.name, t]));
+
   let fullText = "";
   let usage = { input: 0, output: 0 };
   try {
-    for (let round = 0; round < 12; round++) {
+    for (let round = 0; round < (settings.computerControl ? 40 : 12); round++) {
       const stream = client.messages.stream(
         {
           model: settings.model,
           max_tokens: 16000,
           system: [
-            { type: "text", text: CHAT_SYSTEM, cache_control: { type: "ephemeral" } },
+            { type: "text", text: CHAT_SYSTEM + (settings.computerControl ? COMPUTER_SYSTEM : ""), cache_control: { type: "ephemeral" } },
             { type: "text", text: orgContext() },
           ],
-          tools: TOOLS.map((t) => t.tool),
+          tools: [...localTools.map((t) => t.tool), ...serverTools(settings)],
           messages: history,
           ...reasoningParams(settings.model, settings.effort),
         },
@@ -398,6 +497,13 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
         output: usage.output + message.usage.output_tokens,
       };
       history.push({ role: "assistant", content: message.content });
+      for (const block of message.content) {
+        if (block.type === "server_tool_use") {
+          const label = block.name === "web_fetch" ? "قراءة صفحة من الإنترنت" : "بحث في الإنترنت";
+          emit({ jobId, type: "tool", name: block.name, label, phase: "start" });
+          emit({ jobId, type: "tool", name: block.name, label, phase: "end", ok: true });
+        }
+      }
 
       if (message.stop_reason === "refusal") {
         emit({
@@ -417,14 +523,30 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
 
       const results: Anthropic.ToolResultBlockParam[] = [];
       for (const use of toolUses) {
-        const def = TOOL_BY_NAME.get(use.name);
+        const def = toolByName.get(use.name);
         const label = def?.label ?? use.name;
         emit({ jobId, type: "tool", name: use.name, label, phase: "start" });
         try {
           if (!def) throw new Error(`أداة غير معروفة: ${use.name}`);
           const input = (use.input && typeof use.input === "object" ? use.input : {}) as Record<string, unknown>;
-          const out = def.run(input);
-          results.push({ type: "tool_result", tool_use_id: use.id, content: JSON.stringify(out).slice(0, 60_000) });
+          const ask = def.approval?.(input, settings);
+          if (ask) {
+            const ok = await requestApproval(jobId, label, ask, controller.signal);
+            if (!ok) {
+              results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: "رفض المستخدم تنفيذ هذا الإجراء. لا تكرره؛ اسأله عن البديل." });
+              emit({ jobId, type: "tool", name: use.name, label, phase: "end", ok: false });
+              continue;
+            }
+          }
+          const out = await def.run(input);
+          const blocks = (out as { __blocks?: Anthropic.ToolResultBlockParam["content"] })?.__blocks;
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            content: blocks ?? JSON.stringify(out).slice(0, 60_000),
+          });
+          const preview = def.preview?.(input, out);
+          if (preview) emit({ jobId, type: "screenshot", dataUrl: preview, label });
           emit({ jobId, type: "tool", name: use.name, label, phase: "end", ok: true });
         } catch (error) {
           results.push({

@@ -207,6 +207,56 @@ export const Icons = {
       <path d="M4 20 15 9M14 4l.6 1.8 1.8.6-1.8.6L14 8.8l-.6-1.8-1.8-.6 1.8-.6zM19 9l.5 1.4 1.4.5-1.4.5L19 12.8l-.5-1.4-1.4-.5 1.4-.5z" />
     </svg>
   ),
+  grid: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <rect x="3" y="3" width="8" height="8" rx="2" /><rect x="13" y="3" width="8" height="8" rx="2" /><rect x="3" y="13" width="8" height="8" rx="2" /><rect x="13" y="13" width="8" height="8" rx="2" />
+    </svg>
+  ),
+  mail: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <rect x="3" y="5" width="18" height="14" rx="3" />
+      <path d="M3 8l9 6 9-6" />
+    </svg>
+  ),
+  more: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /><circle cx="19" cy="12" r="1.6" fill="currentColor" />
+    </svg>
+  ),
+  chevronDown: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  ),
+  shield: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  ),
+  monitor: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16v4" />
+    </svg>
+  ),
+  camera: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </svg>
+  ),
+  x: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  ),
+  layers: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M12 3l9 5-9 5-9-5z" />
+      <path d="M3 13l9 5 9-5M3 17l9 5 9-5" />
+    </svg>
+  ),
 };
 
 export type IconName = keyof typeof Icons;

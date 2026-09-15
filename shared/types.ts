@@ -342,12 +342,22 @@ export interface AiSettings {
   adminName: string;
   adminTitle: string;
   encrypted: boolean;
+  /** وضع التحكم بالكمبيوتر مفعّل (سطح المكتب فقط). */
+  computerControl: boolean;
+  /** هل المنصة الحالية تدعم التحكم بالكمبيوتر أصلًا؟ */
+  computerAvailable: boolean;
+  webSearch: boolean;
+  confirmCommands: boolean;
+  confirmGui: boolean;
+  platform: "windows" | "mac" | "linux" | "mobile";
 }
 
 /** الحدث المبثوث من العملية الرئيسية أثناء توليد رد. */
 export type AiStreamEvent =
   | { jobId: string; type: "text"; text: string }
   | { jobId: string; type: "tool"; name: string; label: string; phase: "start" | "end"; ok?: boolean }
+  | { jobId: string; type: "approval"; requestId: string; label: string; detail: string }
+  | { jobId: string; type: "screenshot"; dataUrl: string; label: string }
   | { jobId: string; type: "done"; text: string; usage?: { input: number; output: number } }
   | { jobId: string; type: "error"; message: string }
   | { jobId: string; type: "refusal"; message: string };
@@ -374,6 +384,10 @@ export interface AiChatMessage {
   role: "user" | "assistant";
   text: string;
   tools?: { name: string; label: string; ok?: boolean }[];
+  /** لقطات شاشة التُقطت أثناء التحكم بالكمبيوتر (data URL مصغّر). */
+  shots?: { dataUrl: string; label: string }[];
+  /** طلب موافقة معلّق على إجراء (يُعرض بأزرار). */
+  approval?: { requestId: string; label: string; detail: string; decided?: boolean };
   at: string;
   error?: string;
 }
@@ -386,16 +400,3 @@ export interface ExtractedTask {
   tags: string[];
 }
 
-/* ------------------------------ UMS ------------------------------ */
-
-export interface UmsState {
-  url: string;
-  title: string;
-  loading: boolean;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  error: string | null;
-  zoom: number;
-  theme: "modern" | "original";
-  dark: boolean;
-}

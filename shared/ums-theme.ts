@@ -1,21 +1,14 @@
 /**
- * لوحة نظام الجامعة الموحّد (UMS) مدمجة داخل التطبيق.
- *
- * تُعرض عبر WebContentsView منفصل (جلسة دائمة «persist:mbzuh-ums» تحفظ تسجيل
- * الدخول)، وتضبط الواجهة حدوده بدقة حسب المساحة المتاحة. يُحقن «المظهر الحديث»
- * كـCSS فوق Bootstrap 4 الذي يعتمده الموقع، مع وضع داكن اختياري — دون المساس
- * بمنطق الموقع أو بياناته.
+ * «المظهر الحديث» للوحة UMS: أنماط تُحقن فوق Bootstrap 4 الذي يعتمده الموقع،
+ * مع وضع داكن اختياري. مشترك بين نسخة سطح المكتب (WebContentsView) ونسخة
+ * الأندرويد (WebView أصلي).
  */
-import { BrowserWindow, WebContentsView, session, shell } from "electron";
-import { getSetting, setSetting } from "../db";
-import type { UmsState } from "../../shared/types";
-import tajawal400Ar from "../../src/assets/fonts/tajawal-400-arabic.woff2";
-import tajawal400La from "../../src/assets/fonts/tajawal-400-latin.woff2";
-import tajawal700Ar from "../../src/assets/fonts/tajawal-700-arabic.woff2";
-import tajawal700La from "../../src/assets/fonts/tajawal-700-latin.woff2";
+import tajawal400Ar from "../src/assets/fonts/tajawal-400-arabic.woff2";
+import tajawal400La from "../src/assets/fonts/tajawal-400-latin.woff2";
+import tajawal700Ar from "../src/assets/fonts/tajawal-700-arabic.woff2";
+import tajawal700La from "../src/assets/fonts/tajawal-700-latin.woff2";
 
 export const DEFAULT_UMS_URL = "https://ums.mbzuh.ac.ae";
-const PARTITION = "persist:mbzuh-ums";
 
 const ARABIC_RANGE = "U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E";
 const LATIN_RANGE = "U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC, U+2122, U+FEFF, U+FFFD";
@@ -28,7 +21,7 @@ const FONT_CSS = `
 `;
 
 /** المظهر الحديث: يعيد تشكيل مكوّنات Bootstrap 4 (أزرار، حقول، بطاقات، جداول، قوائم). */
-const MODERN_CSS = `
+export const MODERN_CSS = `
 ${FONT_CSS}
 :root{--mb-gold:#956a28;--mb-gold-2:#c9a24a;--mb-gold-3:#f1dfae;--mb-navy:#0f1f3d;--mb-bg:#f6f3ec;--mb-card:#ffffff;--mb-ink:#1c2433;--mb-muted:#6b7280;--mb-border:#e6dfd0;--mb-radius:14px;--mb-shadow:0 12px 32px rgba(15,31,61,.08)}
 html{scroll-behavior:smooth}
@@ -116,7 +109,7 @@ body.text-center img.spinhov{filter:drop-shadow(0 10px 20px rgba(15,31,61,.18))}
 .card,.table,.alert,.jumbotron{animation:mbIn .35s ease-out both}
 `;
 
-const DARK_CSS = `
+export const DARK_CSS = `
 html{color-scheme:dark}
 body,body:not(.text-center){background:#0b1426!important;background-image:radial-gradient(900px 400px at 100% -10%,rgba(201,162,74,.12),transparent 60%),radial-gradient(700px 400px at -10% 110%,rgba(59,90,160,.16),transparent 60%)!important;color:#e6ebf5!important}
 body.text-center{background:radial-gradient(1200px 700px at 20% -10%,rgba(201,162,74,.22),transparent 60%),linear-gradient(160deg,#0b1426 0%,#0f1f3d 100%)!important}
@@ -144,245 +137,18 @@ hr{border-color:#23345a!important}
 ::-webkit-scrollbar-thumb{background:rgba(201,162,74,.5);background-clip:padding-box;border:2px solid transparent}
 `;
 
-export class UmsManager {
-  private view: WebContentsView | null = null;
-  private win: BrowserWindow | null = null;
-  private visible = false;
-  private bounds = { x: 0, y: 0, width: 0, height: 0 };
-  private cssKeys: { modern?: string; dark?: string } = {};
-  private lastError: string | null = null;
-  private zoom = 1;
 
-  attach(win: BrowserWindow): void {
-    this.win = win;
-    win.on("closed", () => {
-      this.view = null;
-      this.win = null;
-    });
-  }
-
-  homeUrl(): string {
-    return getSetting("ums_url", DEFAULT_UMS_URL) || DEFAULT_UMS_URL;
-  }
-
-  private theme(): "modern" | "original" {
-    return getSetting("ums_theme", "modern") === "original" ? "original" : "modern";
-  }
-
-  private dark(): boolean {
-    return getSetting("ums_dark", "0") === "1";
-  }
-
-  private ensureView(): WebContentsView {
-    if (this.view) return this.view;
-    if (!this.win) throw new Error("النافذة الرئيسية غير جاهزة");
-    const ses = session.fromPartition(PARTITION);
-    ses.setUserAgent(ses.getUserAgent().replace(/ Electron\/[\d.]+/, "").replace(/ mbzuh-admin\/[\d.]+/i, ""));
-    const view = new WebContentsView({
-      webPreferences: {
-        partition: PARTITION,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        spellcheck: false,
-      },
-    });
-    view.setBackgroundColor("#f6f3ec");
-    const wc = view.webContents;
-    wc.setWindowOpenHandler(({ url }) => {
-      // نبقي الروابط داخل اللوحة نفسها؛ الروابط الخارجية تُفتح في المتصفح.
-      if (this.isInternal(url)) void wc.loadURL(url);
-      else if (url.startsWith("http")) void shell.openExternal(url);
-      return { action: "deny" };
-    });
-    wc.on("did-start-loading", () => this.broadcast());
-    wc.on("did-stop-loading", () => this.broadcast());
-    wc.on("did-navigate", () => {
-      this.lastError = null;
-      this.broadcast();
-    });
-    wc.on("did-navigate-in-page", () => this.broadcast());
-    wc.on("page-title-updated", () => this.broadcast());
-    wc.on("dom-ready", () => {
-      this.cssKeys = {};
-      void this.applyTheme();
-    });
-    wc.on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
-      if (!isMainFrame || code === -3) return; // -3 = ABORTED (تنقّل جديد)
-      this.lastError = `تعذّر تحميل ${url} — ${desc} (${code})`;
-      this.broadcast();
-    });
-    wc.on("render-process-gone", (_e, details) => {
-      this.lastError = `توقفت صفحة اللوحة (${details.reason}). أعد التحميل.`;
-      this.broadcast();
-    });
-    this.win.contentView.addChildView(view);
-    view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-    view.setVisible(false);
-    this.view = view;
-    void wc.loadURL(this.homeUrl());
-    return view;
-  }
-
-  private isInternal(url: string): boolean {
-    try {
-      const home = new URL(this.homeUrl());
-      const target = new URL(url);
-      const host = target.hostname;
-      return (
-        host === home.hostname ||
-        host.endsWith(".mbzuh.ac.ae") ||
-        /(^|\.)microsoftonline\.com$|(^|\.)microsoft\.com$|(^|\.)live\.com$|(^|\.)uaepass\.ae$|(^|\.)msauth\.net$|(^|\.)msftauth\.net$/i.test(host)
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  private async applyTheme(): Promise<void> {
-    const wc = this.view?.webContents;
-    if (!wc || wc.isDestroyed()) return;
-    try {
-      if (this.theme() === "modern") {
-        if (!this.cssKeys.modern) this.cssKeys.modern = await wc.insertCSS(MODERN_CSS, { cssOrigin: "author" });
-        if (this.dark()) {
-          if (!this.cssKeys.dark) this.cssKeys.dark = await wc.insertCSS(DARK_CSS, { cssOrigin: "author" });
-        } else if (this.cssKeys.dark) {
-          await wc.removeInsertedCSS(this.cssKeys.dark);
-          this.cssKeys.dark = undefined;
-        }
-      } else {
-        if (this.cssKeys.dark) await wc.removeInsertedCSS(this.cssKeys.dark);
-        if (this.cssKeys.modern) await wc.removeInsertedCSS(this.cssKeys.modern);
-        this.cssKeys = {};
-      }
-      this.view?.setBackgroundColor(this.theme() === "modern" && this.dark() ? "#0b1426" : "#f6f3ec");
-    } catch {
-      /* الصفحة قد تكون انتقلت أثناء الحقن */
-    }
-    this.broadcast();
-  }
-
-  state(): UmsState {
-    const wc = this.view?.webContents;
-    const alive = !!wc && !wc.isDestroyed();
-    return {
-      url: alive ? wc!.getURL() : this.homeUrl(),
-      title: alive ? wc!.getTitle() : "",
-      loading: alive ? wc!.isLoading() : false,
-      canGoBack: alive ? wc!.navigationHistory.canGoBack() : false,
-      canGoForward: alive ? wc!.navigationHistory.canGoForward() : false,
-      error: this.lastError,
-      zoom: this.zoom,
-      theme: this.theme(),
-      dark: this.dark(),
-    };
-  }
-
-  private broadcast(): void {
-    if (!this.win || this.win.isDestroyed()) return;
-    this.win.webContents.send("app:ums", this.state());
-  }
-
-  show(bounds: { x: number; y: number; width: number; height: number }): UmsState {
-    const view = this.ensureView();
-    this.bounds = {
-      x: Math.round(bounds.x),
-      y: Math.round(bounds.y),
-      width: Math.max(0, Math.round(bounds.width)),
-      height: Math.max(0, Math.round(bounds.height)),
-    };
-    view.setBounds(this.bounds);
-    if (!this.visible) {
-      view.setVisible(true);
-      this.visible = true;
-    }
-    return this.state();
-  }
-
-  hide(): void {
-    if (!this.view) return;
-    this.view.setVisible(false);
-    this.visible = false;
-  }
-
-  setVisible(visible: boolean): void {
-    if (!this.view) return;
-    if (visible) {
-      this.view.setBounds(this.bounds);
-      this.view.setVisible(true);
-      this.visible = true;
-    } else this.hide();
-  }
-
-  navigate(action: "back" | "forward" | "reload" | "home" | "stop" | "url", url?: string): UmsState {
-    const wc = this.ensureView().webContents;
-    this.lastError = null;
-    switch (action) {
-      case "back":
-        if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
-        break;
-      case "forward":
-        if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
-        break;
-      case "reload":
-        wc.reload();
-        break;
-      case "stop":
-        wc.stop();
-        break;
-      case "home":
-        void wc.loadURL(this.homeUrl());
-        break;
-      case "url":
-        if (url) {
-          const target = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-          if (this.isInternal(target)) void wc.loadURL(target);
-          else void shell.openExternal(target);
-        }
-        break;
-    }
-    return this.state();
-  }
-
-  setZoom(direction: "in" | "out" | "reset"): UmsState {
-    const wc = this.ensureView().webContents;
-    this.zoom = direction === "reset" ? 1 : Math.min(2, Math.max(0.6, this.zoom + (direction === "in" ? 0.1 : -0.1)));
-    wc.setZoomFactor(Number(this.zoom.toFixed(2)));
-    return this.state();
-  }
-
-  async setTheme(theme: "modern" | "original", dark: boolean): Promise<UmsState> {
-    setSetting("ums_theme", theme);
-    setSetting("ums_dark", dark ? "1" : "0");
-    await this.applyTheme();
-    return this.state();
-  }
-
-  setHomeUrl(url: string): UmsState {
-    const clean = url.trim() || DEFAULT_UMS_URL;
-    setSetting("ums_url", /^https?:\/\//i.test(clean) ? clean : `https://${clean}`);
-    return this.state();
-  }
-
-  async clearSession(): Promise<void> {
-    const ses = session.fromPartition(PARTITION);
-    await ses.clearStorageData();
-    await ses.clearCache();
-    if (this.view) this.navigate("home");
-  }
-
-  openExternal(): void {
-    const url = this.state().url || this.homeUrl();
-    void shell.openExternal(url);
-  }
-
-  destroy(): void {
-    if (this.view && this.win && !this.win.isDestroyed()) {
-      this.win.contentView.removeChildView(this.view);
-    }
-    this.view = null;
+/** هل الرابط ضمن نطاقات الجامعة أو تسجيل الدخول (يبقى داخل اللوحة)؟ */
+export function isUmsInternalUrl(url: string, homeUrl = DEFAULT_UMS_URL): boolean {
+  try {
+    const home = new URL(homeUrl);
+    const host = new URL(url).hostname;
+    return (
+      host === home.hostname ||
+      host.endsWith(".mbzuh.ac.ae") ||
+      /(^|\.)microsoftonline\.com$|(^|\.)microsoft\.com$|(^|\.)live\.com$|(^|\.)uaepass\.ae$|(^|\.)msauth\.net$|(^|\.)msftauth\.net$/i.test(host)
+    );
+  } catch {
+    return false;
   }
 }
-
-export const ums = new UmsManager();

@@ -1,0 +1,95 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id "com.android.application"
+}
+
+// رقم الإصدار يُقرأ من package.json الجذري حتى تبقى نسخ ويندوز والأندرويد متطابقة.
+def pkg = new JsonSlurper().parse(rootProject.file("../package.json"))
+def appVersion = pkg.version as String
+def (vMajor, vMinor, vPatch) = appVersion.tokenize(".").collect { it.toInteger() }
+
+// واجهة الويب المبنية (npm run build:mobile) تُنسخ إلى assets/www داخل الـAPK.
+def webDir = rootProject.file("../dist-mobile")
+def webAssets = layout.buildDirectory.dir("generated/webassets")
+
+android {
+    namespace "com.alcode.mbzuh"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.alcode.mbzuh.admin"
+        minSdk 29
+        targetSdk 34
+        versionCode vMajor * 10000 + vMinor * 100 + vPatch
+        versionName appVersion
+    }
+
+    signingConfigs {
+        release {
+            def ksPath = System.getenv("MBZUH_KEYSTORE_PATH")
+            if (ksPath && file(ksPath).exists()) {
+                storeFile file(ksPath)
+                storePassword System.getenv("MBZUH_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("MBZUH_KEY_ALIAS")
+                keyPassword System.getenv("MBZUH_KEY_PASSWORD")
+            } else {
+                def debugKs = new File(System.getProperty("user.home"), ".android/debug.keystore")
+                if (!debugKs.exists()) {
+                    debugKs.parentFile.mkdirs()
+                    project.exec {
+                        commandLine "keytool", "-genkeypair", "-keystore", debugKs.absolutePath,
+                                "-storepass", "android", "-alias", "androiddebugkey", "-keypass", "android",
+                                "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
+                                "-dname", "CN=Android Debug,O=Android,C=US"
+                    }
+                }
+                storeFile debugKs
+                storePassword "android"
+                keyAlias "androiddebugkey"
+                keyPassword "android"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    sourceSets {
+        main { assets.srcDirs += webAssets }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "MBZUH-Admin-${variant.versionName}-${variant.buildType.name}.apk"
+        }
+    }
+}
+
+tasks.register("copyWebAssets", Copy) {
+    doFirst {
+        if (!webDir.exists()) throw new GradleException("لم يُعثر على dist-mobile — شغّل: npm run build:mobile")
+    }
+    from(webDir)
+    into(webAssets.map { it.dir("www") })
+}
+tasks.named("preBuild") { dependsOn("copyWebAssets") }
+
+dependencies {
+    implementation platform("org.jetbrains.kotlin:kotlin-bom:1.8.22")
+    implementation "androidx.appcompat:appcompat:1.7.0"
+    implementation "androidx.webkit:webkit:1.11.0"
+    implementation "androidx.activity:activity:1.9.2"
+    // دعم هواتف الطي: رصد المفصلة ووضعية الطاولة/الكتاب
+    implementation "androidx.window:window:1.3.0"
+    implementation "androidx.window:window-java:1.3.0"
+}

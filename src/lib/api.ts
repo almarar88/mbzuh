@@ -25,8 +25,8 @@ import type {
   TaskStats,
   TaskStatus,
   Trainer,
-  UmsState,
 } from "@shared/types";
+import type { PortalConfig, PortalCredential, PortalsState } from "@shared/portals";
 
 declare global {
   interface Window {
@@ -259,8 +259,17 @@ export const api = {
   ai: {
     settings: () => call<AiSettings>("ai:settings"),
     setKey: (key: string) => call<AiSettings>("ai:setKey", key),
-    setPrefs: (prefs: { model?: string; effort?: string; adminName?: string; adminTitle?: string }) =>
-      call<AiSettings>("ai:setPrefs", prefs),
+    setPrefs: (prefs: {
+      model?: string;
+      effort?: string;
+      adminName?: string;
+      adminTitle?: string;
+      computerControl?: boolean;
+      webSearch?: boolean;
+      confirmCommands?: boolean;
+      confirmGui?: boolean;
+    }) => call<AiSettings>("ai:setPrefs", prefs),
+    approve: (requestId: string, ok: boolean) => call<boolean>("ai:approve", requestId, ok),
     test: () => call<{ ok: boolean; message: string; model: string }>("ai:test"),
     templates: () => call<Record<string, string>>("ai:templates"),
     chat: (chatId: string, jobId: string, text: string) => call<string>("ai:chat", chatId, jobId, text),
@@ -275,17 +284,21 @@ export const api = {
     deleteChat: (chatId: string) => call<boolean>("ai:deleteChat", chatId),
     saveText: (suggested: string, text: string) => call<string | null>("ai:saveText", suggested, text),
   },
-  ums: {
-    show: (bounds: { x: number; y: number; width: number; height: number }) => call<UmsState>("ums:show", bounds),
-    hide: () => call<boolean>("ums:hide"),
-    visible: (visible: boolean) => call<boolean>("ums:visible", visible),
-    state: () => call<UmsState>("ums:state"),
+  portal: {
+    state: () => call<PortalsState>("portal:state"),
+    save: (list: PortalConfig[]) => call<PortalsState>("portal:save", list),
+    open: (id: string, bounds?: { x: number; y: number; width: number; height: number }) => call<PortalsState>("portal:open", id, bounds),
+    bounds: (bounds: { x: number; y: number; width: number; height: number }) => call<PortalsState>("portal:bounds", bounds),
+    hide: () => call<boolean>("portal:hide"),
+    visible: (visible: boolean) => call<boolean>("portal:visible", visible),
     navigate: (action: "back" | "forward" | "reload" | "home" | "stop" | "url", url?: string) =>
-      call<UmsState>("ums:navigate", action, url),
-    zoom: (direction: "in" | "out" | "reset") => call<UmsState>("ums:zoom", direction),
-    theme: (theme: "modern" | "original", dark: boolean) => call<UmsState>("ums:theme", theme, dark),
-    setHome: (url: string) => call<UmsState>("ums:setHome", url),
-    openExternal: () => call<boolean>("ums:openExternal"),
-    clearSession: () => call<boolean>("ums:clearSession"),
+      call<PortalsState>("portal:navigate", action, url),
+    zoom: (direction: "in" | "out" | "reset") => call<PortalsState>("portal:zoom", direction),
+    theme: (id: string, theme: "modern" | "original", dark: boolean) => call<PortalsState>("portal:theme", id, theme, dark),
+    openExternal: (id?: string) => call<boolean>("portal:openExternal", id),
+    clearSession: () => call<boolean>("portal:clearSession"),
+    credentials: () => call<Record<string, { username: string; autofill: boolean; hasPassword: boolean }>>("portal:credentials"),
+    setCredential: (id: string, cred: PortalCredential | null) =>
+      call<Record<string, { username: string; autofill: boolean; hasPassword: boolean }>>("portal:setCredential", id, cred),
   },
 };

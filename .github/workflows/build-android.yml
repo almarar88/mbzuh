@@ -1,0 +1,95 @@
+name: بناء منصّة الإداري (MBZUH Admin) لأندرويد
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "وسم الإصدار الذي سيُنشر (مثال android-v2.1.0) — اتركه فارغًا لبناء المُخرَج فقط"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "android-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: تثبيت الاعتماديات
+        run: npm ci
+
+      - name: فحص الأنواع
+        run: npm run typecheck
+
+      - name: بناء واجهة الجوال
+        run: npm run build:mobile
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-34 build-tools;34.0.0 platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      # توقيع الإصدار: يستخدم أسرار المستودع إن وُجدت، وإلا مفتاح التصحيح (يُثبَّت الـAPK لكن التحديث فوق توقيع مختلف يتطلب إزالة).
+      - name: تجهيز مفتاح التوقيع (اختياري)
+        if: ${{ env.MBZUH_KEYSTORE_B64 != '' }}
+        env:
+          MBZUH_KEYSTORE_B64: ${{ secrets.MBZUH_KEYSTORE_B64 }}
+        run: echo "$MBZUH_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mbzuh.jks"
+
+      - name: بناء APK
+        working-directory: android
+        env:
+          MBZUH_KEYSTORE_PATH: ${{ secrets.MBZUH_KEYSTORE_B64 != '' && format('{0}/mbzuh.jks', runner.temp) || '' }}
+          MBZUH_KEYSTORE_PASSWORD: ${{ secrets.MBZUH_KEYSTORE_PASSWORD }}
+          MBZUH_KEY_ALIAS: ${{ secrets.MBZUH_KEY_ALIAS }}
+          MBZUH_KEY_PASSWORD: ${{ secrets.MBZUH_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease assembleDebug --no-daemon
+
+      - name: رفع ملفات APK كمُخرَج
+        uses: actions/upload-artifact@v4
+        with:
+          name: MBZUH-Admin-APK
+          path: |
+            android/app/build/outputs/apk/release/MBZUH-Admin-*-release.apk
+            android/app/build/outputs/apk/debug/MBZUH-Admin-*-debug.apk
+          if-no-files-found: error
+
+      - name: نشر الإصدار
+        if: ${{ startsWith(github.ref, 'refs/tags/android-v') || github.event.inputs.tag != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: منصّة الإداري لأندرويد ${{ github.event.inputs.tag || github.ref_name }}
+          make_latest: false
+          files: android/app/build/outputs/apk/release/MBZUH-Admin-*-release.apk
+          body: |
+            ## منصّة الإداري — جامعة محمد بن زايد للعلوم الإنسانية (أندرويد)
+
+            تطبيق أندرويد (10 فأحدث) بنفس مزايا نسخة ويندوز: البوابات الجامعية
+            (UMS، لوحة الدورات Hub، Outlook، Teams، SharePoint، OneHub) داخل التطبيق
+            بجلسة دخول محفوظة وتعبئة تلقائية، المساعد الذكي (Claude API)، لوحة المهام،
+            المحاضر، ووحدات الدورات. يدعم هواتف الطي (Galaxy Z Fold وأمثاله): تخطيط
+            يتكيّف مع الشاشة الداخلية والخارجية دون إعادة تشغيل، ووضع الطاولة.
+
+            نزّل `MBZUH-Admin-<الإصدار>-release.apk` وثبّته (فعّل «مصادر غير معروفة» عند الطلب).
+
+            ---
+            تطوير **Alcode**

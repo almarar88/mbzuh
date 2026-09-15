@@ -2,23 +2,15 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Badge, Button, EmptyState, Panel } from "../components/ui";
 import { Icon, type IconName } from "../components/icons";
-import { BarList, Meter, SegmentedBar } from "../components/Charts";
+import { BarList, SegmentedBar } from "../components/Charts";
 import { formatDate, formatDateTime, todayISO } from "@shared/text";
+import { PORTAL_COLORS, type PortalsState } from "@shared/portals";
 import type { Conflict, DashboardStats, Task, TaskStats } from "@shared/types";
 import type { PageId } from "../App";
 
-const SHORTCUTS: { label: string; desc: string; page: PageId; icon: IconName; accent?: boolean }[] = [
-  { label: "نظام الجامعة الموحّد", desc: "افتح لوحة UMS بمظهر حديث", page: "ums", icon: "globe", accent: true },
-  { label: "المساعد الذكي", desc: "خطابات، بريد، تلخيص، مهام", page: "assistant", icon: "sparkles", accent: true },
-  { label: "لوحة المهام", desc: "ما عليك إنجازه اليوم", page: "tasks", icon: "tasks" },
-  { label: "مولّد التقارير", desc: "PDF / Excel جاهز للإدارة", page: "reports", icon: "chart" },
-];
-
 function greeting(): string {
   const h = new Date().getHours();
-  if (h < 12) return "صباح الخير";
-  if (h < 17) return "مساء الخير";
-  return "مساء الخير";
+  return h < 12 ? "صباح الخير" : "مساء الخير";
 }
 
 function useCountUp(target: number, ms = 700): number {
@@ -37,28 +29,18 @@ function useCountUp(target: number, ms = 700): number {
   return v;
 }
 
-function StatCard({ label, value, hint, tone, icon }: { label: string; value: number; hint?: string; tone?: "danger" | "ok"; icon: IconName }) {
+function Tile({ label, value, tone, icon, onClick }: { label: string; value: number; tone: "blue" | "purple" | "coral" | "lime" | "gold" | "dark"; icon: IconName; onClick?: () => void }) {
   const n = useCountUp(value);
-  const color = tone === "danger" ? "var(--danger)" : tone === "ok" ? "var(--ok)" : "var(--ink)";
   return (
-    <Panel className="stat-card panel-hover min-w-0">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-xs truncate" style={{ color: "var(--muted)" }}>
-          {label}
-        </div>
-        <span style={{ color: "var(--accent)", opacity: 0.8 }}>
-          <Icon name={icon} size={16} />
+    <button className={`tile tile-${tone} text-start`} onClick={onClick} style={{ border: tone === "dark" ? undefined : "none", cursor: onClick ? "pointer" : "default" }}>
+      <div className="flex items-center justify-between">
+        <span className="tile-value">{n}</span>
+        <span style={{ opacity: 0.7 }}>
+          <Icon name={icon} size={18} />
         </span>
       </div>
-      <div className="text-[26px] font-extrabold tabular-nums leading-tight" style={{ color }}>
-        {n}
-      </div>
-      {hint && (
-        <div className="text-xs mt-1 truncate" style={{ color: "var(--muted)" }}>
-          {hint}
-        </div>
-      )}
-    </Panel>
+      <span className="tile-label">{label}</span>
+    </button>
   );
 }
 
@@ -69,15 +51,19 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskStats, setTaskStats] = useState<TaskStats | null>(null);
   const [adminName, setAdminName] = useState("");
+  const [portals, setPortals] = useState<PortalsState | null>(null);
+  const [showCourses, setShowCourses] = useState(false);
 
   useEffect(() => {
     void (async () => {
-      const [s, c, a, t, ai] = await Promise.all([
+      const [s, c, a, t, ai, p, settings] = await Promise.all([
         api.dashboard.stats(),
         api.conflicts.all(),
         api.dashboard.activity(),
         api.tasks.list(),
         api.ai.settings(),
+        api.portal.state(),
+        api.settings.all(),
       ]);
       setStats(s);
       setConflicts(c);
@@ -85,16 +71,18 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
       setTasks(t.tasks);
       setTaskStats(t.stats);
       setAdminName(ai.adminName);
+      setPortals(p);
+      setShowCourses(settings.courses_open === "1" || s.courses > 0);
     })();
   }, []);
 
-  if (!stats) {
+  if (!stats || !portals) {
     return (
       <div className="space-y-3">
-        <div className="skeleton" style={{ height: 120, borderRadius: 22 }} />
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="skeleton" style={{ height: 92 }} />
+        <div className="skeleton" style={{ height: 150, borderRadius: 26 }} />
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: 104 }} />
           ))}
         </div>
       </div>
@@ -102,10 +90,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   }
 
   const errors = conflicts.filter((c) => c.severity === "error");
-  const warnings = conflicts.filter((c) => c.severity === "warning");
   const today = todayISO();
-  const focus = tasks
-    .filter((t) => t.status !== "done")
+  const open = tasks.filter((t) => t.status !== "done");
+  const focus = open
     .sort((a, b) => {
       const pa = { urgent: 0, high: 1, normal: 2, low: 3 }[a.priority];
       const pb = { urgent: 0, high: 1, normal: 2, low: 3 }[b.priority];
@@ -114,65 +101,96 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
       return da === db ? pa - pb : da.localeCompare(db);
     })
     .slice(0, 6);
+  const featured = portals.portals.slice(0, 4);
 
   return (
     <div className="stagger">
-      <div className="hero mb-4">
-        <div className="relative flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="hero-title">
-              {greeting()}
-              {adminName ? `، ${adminName.split(" ")[0]}` : ""} 👋
-            </div>
-            <div className="hero-sub">
-              {taskStats && taskStats.overdue > 0
-                ? `لديك ${taskStats.overdue} مهمة متأخرة و${taskStats.dueToday} مستحقة اليوم.`
-                : taskStats && taskStats.dueToday > 0
-                  ? `لديك ${taskStats.dueToday} مهمة مستحقة اليوم — وفّقك الله.`
-                  : errors.length > 0
-                    ? `يوجد ${errors.length} تعارض في الجدول يحتاج معالجة.`
-                    : "كل شيء تحت السيطرة. اختر من أين تبدأ."}
-            </div>
+      {/* البطل */}
+      <div className="hero-grid mb-5">
+        <div>
+          <div className="hero-title">
+            {greeting()}
+            {adminName ? `، ${adminName.split(" ")[0]}` : ""} 👋
+            <br />
+            <span style={{ color: "var(--muted)", fontWeight: 700 }}>ماذا تريد أن تنجز اليوم؟</span>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {SHORTCUTS.map((s) => (
-              <button
-                key={s.page}
-                onClick={() => onNavigate(s.page)}
-                className="text-start rounded-2xl px-4 py-3 flex items-center gap-3"
-                style={{
-                  background: s.accent ? "rgba(201,162,74,0.16)" : "rgba(255,255,255,0.07)",
-                  border: `1px solid ${s.accent ? "rgba(201,162,74,0.5)" : "rgba(255,255,255,0.14)"}`,
-                  color: "#f5f7fb",
-                  cursor: "pointer",
-                  minWidth: 190,
-                  transition: "transform .14s, background .14s",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "none")}
-              >
-                <span
-                  className="inline-flex items-center justify-center shrink-0"
-                  style={{ width: 36, height: 36, borderRadius: 12, background: "rgba(255,255,255,0.1)", color: s.accent ? "#f1dfae" : "#fff" }}
-                >
-                  <Icon name={s.icon} size={18} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-bold text-sm">{s.label}</span>
-                  <span className="block text-[11.5px] opacity-75 truncate">{s.desc}</span>
-                </span>
+          <p className="hero-sub">
+            {taskStats && taskStats.overdue > 0
+              ? `لديك ${taskStats.overdue} مهمة متأخرة و${taskStats.dueToday} مستحقة اليوم.`
+              : taskStats && taskStats.dueToday > 0
+                ? `لديك ${taskStats.dueToday} مهمة مستحقة اليوم.`
+                : errors.length > 0
+                  ? `يوجد ${errors.length} تعارض في جدول الدورات يحتاج معالجة.`
+                  : "كل شيء تحت السيطرة. البوابات والمساعد ومهامك في مكان واحد."}
+          </p>
+          <button className="search-pill mt-4" onClick={() => onNavigate("assistant")}>
+            <Icon name="sparkles" size={18} style={{ color: "var(--accent)" }} />
+            <span className="flex-1 text-[14px] truncate">اسأل المساعد: لخّص بريدي، ما اجتماعاتي اليوم، جهّز خطابًا…</span>
+            <span className="btn btn-white btn-sm">ابدأ</span>
+          </button>
+          <div className="flex gap-2 flex-wrap mt-3">
+            {[
+              "لخّص أهم الرسائل في بريدي Outlook",
+              "ما اجتماعاتي اليوم في Teams؟",
+              "ما آخر التحديثات في لوحة الدورات Hub؟",
+              "رتّب مهامي هذا الأسبوع",
+            ].map((q) => (
+              <button key={q} className="chip" onClick={() => onNavigate("assistant", undefined, q)}>
+                {q}
               </button>
             ))}
           </div>
         </div>
+
+        {/* بطاقات البوابات المكدّسة */}
+        <div className="stack">
+          {featured.map((p, i) => {
+            const c = PORTAL_COLORS[p.color];
+            return (
+              <button
+                key={p.id}
+                className="stack-card portal-card text-start"
+                onClick={() => onNavigate("portals", undefined, p.id)}
+                style={{ background: c.bg, color: c.ink, minHeight: 96, transform: `translateX(${(i % 2 ? -1 : 1) * i * 6}px) rotate(${(i % 2 ? 1 : -1) * 0.6}deg)`, zIndex: 10 - i }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="portal-glyph" style={{ background: "rgba(255,255,255,.55)", color: c.ink }}>
+                    {p.glyph}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-extrabold text-[15px] truncate">{p.name}</span>
+                    <span className="block text-[12px] truncate" style={{ opacity: 0.75 }}>
+                      {p.hint}
+                    </span>
+                  </span>
+                  <span className="portal-arrow">
+                    <Icon name="arrowLeft" size={16} />
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+          <button className="btn btn-ghost btn-sm mt-3 w-full" onClick={() => onNavigate("portals")}>
+            كل البوابات ({portals.portals.length}) <Icon name="arrowLeft" size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* مؤشرات */}
+      <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+        <Tile label="مهام مفتوحة" value={taskStats ? taskStats.todo + taskStats.doing : 0} tone="blue" icon="tasks" onClick={() => onNavigate("tasks")} />
+        <Tile label="قيد العمل" value={taskStats?.doing ?? 0} tone="purple" icon="clock" onClick={() => onNavigate("tasks")} />
+        <Tile label="متأخرة" value={taskStats?.overdue ?? 0} tone="coral" icon="bell" onClick={() => onNavigate("tasks")} />
+        <Tile label="منجزة" value={taskStats?.done ?? 0} tone="lime" icon="check" onClick={() => onNavigate("tasks")} />
+        <Tile label="محاضر وملاحظات" value={stats.minutes} tone="dark" icon="minutes" onClick={() => onNavigate("minutes")} />
       </div>
 
       {errors.length > 0 && (
-        <Panel className="mb-4" padded>
+        <Panel className="mb-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h3 className="font-bold mb-1" style={{ color: "var(--danger)" }}>
-                ⚠ يوجد {errors.length} تعارض يحتاج معالجة
+                ⚠ يوجد {errors.length} تعارض في جدول الدورات
               </h3>
               <ul className="text-sm space-y-1" style={{ color: "var(--ink-2)" }}>
                 {errors.slice(0, 3).map((c) => (
@@ -185,33 +203,16 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
         </Panel>
       )}
 
-      <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
-        <StatCard label="الدورات الجارية" value={stats.activeCourses} hint={`${stats.plannedCourses} دورة مخطّطة`} icon="book" />
-        <StatCard label="المدربون النشطون" value={stats.activeTrainers} hint={`من أصل ${stats.trainers}`} icon="users" />
-        <StatCard label="الطلبة المسجلون" value={stats.students} hint={`${stats.enrollments} تسجيل`} icon="graduate" />
-        <StatCard label="القاعات" value={stats.rooms} hint={`${stats.bookingsThisWeek} حجز هذا الأسبوع`} icon="building" />
-        <StatCard label="المهام المفتوحة" value={taskStats ? taskStats.todo + taskStats.doing : 0} hint={`${taskStats?.done ?? 0} منجزة`} icon="tasks" />
-        <StatCard label="التعارضات" value={errors.length} tone={errors.length ? "danger" : "ok"} hint={`${warnings.length} تنبيه`} icon="calendar" />
-      </div>
-
-      <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "minmax(300px, 1.2fr) minmax(280px, 1fr) minmax(280px, 1fr)" }}>
+      <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
         <Panel className="h-full">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-sm">تركيز اليوم</h3>
+            <h3 className="font-extrabold text-[15px]">تركيز اليوم</h3>
             <Button size="sm" variant="ghost" onClick={() => onNavigate("tasks")}>
               كل المهام <Icon name="arrowLeft" size={13} />
             </Button>
           </div>
           {focus.length === 0 ? (
-            <EmptyState
-              title="لا توجد مهام مفتوحة"
-              hint="أضف مهمة أو اطلب من المساعد تفكيك هدف"
-              action={
-                <Button size="sm" onClick={() => onNavigate("tasks")}>
-                  + مهمة
-                </Button>
-              }
-            />
+            <EmptyState title="لا توجد مهام مفتوحة" hint="أضف مهمة أو اطلب من المساعد استخراجها من بريدك" action={<Button size="sm" onClick={() => onNavigate("tasks")}>+ مهمة</Button>} />
           ) : (
             <ul className="space-y-2">
               {focus.map((t) => {
@@ -220,8 +221,8 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
                 return (
                   <li key={t.id} className="flex items-center gap-2 text-sm">
                     <button
-                      className="btn btn-ghost btn-icon"
-                      style={{ width: 26, height: 26, padding: 3, borderRadius: 8, border: "1px solid var(--border)" }}
+                      className="btn btn-ghost btn-icon btn-sm"
+                      style={{ width: 28, height: 28, border: "1px solid var(--border)" }}
                       title="إنجاز"
                       onClick={async () => {
                         await api.tasks.update(t.id, { status: "done" });
@@ -250,61 +251,30 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
         </Panel>
 
         <Panel className="h-full">
-          <h3 className="font-bold text-sm mb-3">القادم خلال أسبوع</h3>
-          {stats.upcoming.length === 0 ? (
-            <EmptyState title="لا توجد مواعيد قريبة" />
-          ) : (
-            <ul className="space-y-2">
-              {stats.upcoming.map((u) => (
-                <li key={`${u.kind}-${u.id}`} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="truncate" style={{ color: "var(--ink-2)" }}>
-                    {u.title}
-                  </span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    <Badge>{u.kind}</Badge>
-                    <span className="text-xs tabular-nums" style={{ color: "var(--muted)" }}>
-                      {formatDate(u.date)}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel className="h-full">
-          <h3 className="font-bold text-sm mb-1 flex items-center gap-2">
-            <Icon name="sparkles" size={15} style={{ color: "var(--accent)" }} /> اسأل المساعد
+          <h3 className="font-extrabold text-[15px] mb-1 flex items-center gap-2">
+            <Icon name="sparkles" size={15} style={{ color: "var(--accent)" }} /> أدوات سريعة
           </h3>
           <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
-            اختصارات جاهزة تُرسل مباشرة إلى المحادثة
+            قوالب جاهزة للمراسلات والمهام الإدارية
           </p>
-          <div className="flex flex-col gap-2">
+          <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
             {[
-              "لخّص وضع الدورات والتعارضات اليوم",
-              "ما المهام المتأخرة وما ترتيب معالجتها؟",
-              "اكتب تعميمًا بمواعيد بداية الدورات القادمة",
-              "اقترح خطة عمل لهذا الأسبوع",
-            ].map((q) => (
-              <button key={q} className="chip justify-start" onClick={() => onNavigate("assistant", undefined, q)}>
-                <Icon name="send" size={12} /> {q}
+              { label: "خطاب رسمي", q: "اكتب لي خطابًا رسميًا: " },
+              { label: "ردّ على بريد", q: "اكتب ردًا مهنيًا على هذا البريد: " },
+              { label: "محضر اجتماع", q: "نظّم هذه الملاحظات في محضر اجتماع: " },
+              { label: "تعميم", q: "اكتب تعميمًا للموظفين بخصوص: " },
+              { label: "ترجمة", q: "ترجم إلى الإنجليزية: " },
+              { label: "خطة أسبوعية", q: "اقترح خطة عمل لهذا الأسبوع بناءً على مهامي المفتوحة" },
+            ].map((x) => (
+              <button key={x.label} className="chip justify-center" onClick={() => onNavigate("assistant", undefined, x.q)}>
+                {x.label}
               </button>
             ))}
           </div>
         </Panel>
-      </div>
 
-      <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
-        <BarList title="الدورات حسب اللغة" hint="الدورات الجارية والمخطّطة" data={stats.byLanguage.map((r) => ({ label: r.label, value: r.count }))} />
-        <BarList title="الطلبة حسب المستوى" hint="عدد التسجيلات في كل مستوى" data={stats.byLevel.map((r) => ({ label: r.label, value: r.count }))} />
-        <SegmentedBar title="حالة الدورات" data={stats.byStatus.map((r) => ({ label: r.label, value: r.count }))} />
-      </div>
-
-      <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
-        <Meter label="متوسط نسبة الحضور" value={stats.attendanceRate} hint="محسوبة من كل سجلات الحضور المدخلة أو المستوردة" />
-        <BarList title="إشغال القاعات" hint="مجموع الساعات الأسبوعية لكل قاعة" data={stats.roomUtilisation.map((r) => ({ label: r.room, value: r.hours }))} unit=" س" />
-        <Panel>
-          <h3 className="font-bold text-sm mb-3">آخر العمليات</h3>
+        <Panel className="h-full">
+          <h3 className="font-extrabold text-[15px] mb-3">آخر العمليات</h3>
           {activity.length === 0 ? (
             <EmptyState title="لا توجد عمليات مسجّلة بعد" />
           ) : (
@@ -324,6 +294,48 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
           )}
         </Panel>
       </div>
+
+      {/* قسم الدورات (اختياري) */}
+      <button className="section-title w-full" style={{ background: "none", border: "none", cursor: "pointer", justifyContent: "flex-start" }} onClick={() => setShowCourses((v) => !v)}>
+        <Icon name="chevronDown" size={14} style={{ transform: showCourses ? "rotate(180deg)" : "none" }} /> إدارة الدورات — نظرة سريعة
+      </button>
+      {showCourses && (
+        <div className="stagger">
+          <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+            <Tile label="الدورات الجارية" value={stats.activeCourses} tone="dark" icon="book" onClick={() => onNavigate("courses")} />
+            <Tile label="المدربون النشطون" value={stats.activeTrainers} tone="dark" icon="users" onClick={() => onNavigate("trainers")} />
+            <Tile label="الطلبة" value={stats.students} tone="dark" icon="graduate" onClick={() => onNavigate("students")} />
+            <Tile label="القاعات" value={stats.rooms} tone="dark" icon="building" onClick={() => onNavigate("rooms")} />
+            <Tile label="التعارضات" value={errors.length} tone={errors.length ? "coral" : "dark"} icon="calendar" onClick={() => onNavigate("schedule")} />
+          </div>
+          <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+            <BarList title="الدورات حسب اللغة" hint="الدورات الجارية والمخطّطة" data={stats.byLanguage.map((r) => ({ label: r.label, value: r.count }))} />
+            <SegmentedBar title="حالة الدورات" data={stats.byStatus.map((r) => ({ label: r.label, value: r.count }))} />
+            <Panel>
+              <h3 className="font-bold text-sm mb-3">القادم خلال أسبوع</h3>
+              {stats.upcoming.length === 0 ? (
+                <EmptyState title="لا توجد مواعيد قريبة" />
+              ) : (
+                <ul className="space-y-2">
+                  {stats.upcoming.map((u) => (
+                    <li key={`${u.kind}-${u.id}`} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="truncate" style={{ color: "var(--ink-2)" }}>
+                        {u.title}
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <Badge>{u.kind}</Badge>
+                        <span className="text-xs tabular-nums" style={{ color: "var(--muted)" }}>
+                          {formatDate(u.date)}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,8 @@
-/** قنوات المساعد الذكي، ولوحة المهام، ولوحة UMS المدمجة. */
+/** قنوات المساعد الذكي ولوحة المهام (مشتركة بين سطح المكتب والجوال). */
 import type { BrowserWindow, IpcMain } from "electron";
-import { dialog } from "electron";
+import { app, dialog } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import { app } from "electron";
 import {
   cancelJob,
   chat,
@@ -12,14 +11,15 @@ import {
   getAiSettings,
   getChatTranscript,
   listChats,
+  resolveApproval,
   runTemplate,
   saveApiKey,
   saveTranscript,
+  setApprovalHandler,
   testConnection,
   TEMPLATE_LABELS,
 } from "../services/ai";
 import { createTask, deleteTask, listTasks, reorderTasks, taskStats, updateTask } from "../services/tasks";
-import { ums } from "../services/ums";
 import { setSetting } from "../db";
 import type { AiStreamEvent, AiTemplateInput, Task, TaskStatus } from "../../shared/types";
 
@@ -28,18 +28,38 @@ export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserW
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send("app:ai", event);
   };
+  setApprovalHandler(emit);
 
   /* ------------------------------ المساعد ------------------------------ */
 
   ipcMain.handle("ai:settings", () => getAiSettings());
   ipcMain.handle("ai:setKey", (_e, key: string) => saveApiKey(key));
-  ipcMain.handle("ai:setPrefs", (_e, prefs: { model?: string; effort?: string; adminName?: string; adminTitle?: string }) => {
-    if (prefs.model) setSetting("ai_model", prefs.model);
-    if (prefs.effort) setSetting("ai_effort", prefs.effort);
-    if (prefs.adminName !== undefined) setSetting("ai_admin_name", prefs.adminName);
-    if (prefs.adminTitle !== undefined) setSetting("ai_admin_title", prefs.adminTitle);
-    return getAiSettings();
-  });
+  ipcMain.handle(
+    "ai:setPrefs",
+    (
+      _e,
+      prefs: {
+        model?: string;
+        effort?: string;
+        adminName?: string;
+        adminTitle?: string;
+        computerControl?: boolean;
+        webSearch?: boolean;
+        confirmCommands?: boolean;
+        confirmGui?: boolean;
+      },
+    ) => {
+      if (prefs.model) setSetting("ai_model", prefs.model);
+      if (prefs.effort) setSetting("ai_effort", prefs.effort);
+      if (prefs.adminName !== undefined) setSetting("ai_admin_name", prefs.adminName);
+      if (prefs.adminTitle !== undefined) setSetting("ai_admin_title", prefs.adminTitle);
+      if (prefs.computerControl !== undefined) setSetting("ai_computer", prefs.computerControl ? "1" : "0");
+      if (prefs.webSearch !== undefined) setSetting("ai_web", prefs.webSearch ? "1" : "0");
+      if (prefs.confirmCommands !== undefined) setSetting("ai_confirm_cmd", prefs.confirmCommands ? "1" : "0");
+      if (prefs.confirmGui !== undefined) setSetting("ai_confirm_gui", prefs.confirmGui ? "1" : "0");
+      return getAiSettings();
+    },
+  );
   ipcMain.handle("ai:test", () => testConnection());
   ipcMain.handle("ai:templates", () => TEMPLATE_LABELS);
 
@@ -52,6 +72,7 @@ export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserW
     return jobId;
   });
   ipcMain.handle("ai:cancel", (_e, jobId: string) => cancelJob(jobId));
+  ipcMain.handle("ai:approve", (_e, requestId: string, ok: boolean) => resolveApproval(requestId, ok));
   ipcMain.handle("ai:extractTasks", async (_e, text: string, mode: "goal" | "text") => {
     try {
       return { ok: true, tasks: await extractTasks(text, mode) };
@@ -92,40 +113,4 @@ export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserW
   ipcMain.handle("tasks:bulkCreate", (_e, rows: (Partial<Task> & { title: string })[]) =>
     rows.map((r) => createTask(r)),
   );
-
-  /* ------------------------------- UMS ------------------------------- */
-
-  ipcMain.handle("ums:show", (_e, bounds: { x: number; y: number; width: number; height: number }) => ums.show(bounds));
-  ipcMain.handle("ums:hide", () => {
-    ums.hide();
-    return true;
-  });
-  ipcMain.handle("ums:visible", (_e, visible: boolean) => {
-    ums.setVisible(visible);
-    return true;
-  });
-  ipcMain.handle("ums:state", () => ums.state());
-  ipcMain.handle("ums:navigate", (_e, action: "back" | "forward" | "reload" | "home" | "stop" | "url", url?: string) =>
-    ums.navigate(action, url),
-  );
-  ipcMain.handle("ums:zoom", (_e, direction: "in" | "out" | "reset") => ums.setZoom(direction));
-  ipcMain.handle("ums:theme", (_e, theme: "modern" | "original", dark: boolean) => ums.setTheme(theme, dark));
-  ipcMain.handle("ums:setHome", (_e, url: string) => ums.setHomeUrl(url));
-  ipcMain.handle("ums:openExternal", () => {
-    ums.openExternal();
-    return true;
-  });
-  ipcMain.handle("ums:clearSession", async () => {
-    const confirm = await dialog.showMessageBox({
-      type: "question",
-      buttons: ["تسجيل الخروج ومسح الجلسة", "إلغاء"],
-      defaultId: 1,
-      cancelId: 1,
-      title: "مسح جلسة UMS",
-      message: "سيتم حذف ملفات تعريف الارتباط وبيانات الجلسة الخاصة بلوحة UMS وستحتاج لتسجيل الدخول مجددًا.",
-    });
-    if (confirm.response !== 0) return false;
-    await ums.clearSession();
-    return true;
-  });
 }

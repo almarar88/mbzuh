@@ -184,7 +184,7 @@ export default function MinutesPage({
         </span>
       </Toolbar>
 
-      <div className="grid gap-4" style={{ gridTemplateColumns: "minmax(320px, 1fr) minmax(420px, 1.4fr)" }}>
+      <div className="two-col">
         <Panel padded={false}>
           <div className="scroll-y" style={{ maxHeight: "calc(100vh - 270px)" }}>
             {minutes.length === 0 ? (

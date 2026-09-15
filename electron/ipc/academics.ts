@@ -1,5 +1,6 @@
 /** الوحدة الثالثة: الطلبة والتسجيل والحضور، استيراد إكسل، ومولّد التقارير. */
 import path from "node:path";
+import fs from "node:fs";
 import type { IpcMain } from "electron";
 import { app, dialog, shell } from "electron";
 import ExcelJS from "exceljs";
@@ -32,7 +33,7 @@ async function reportToXlsx(report: AcademicReport, target: string): Promise<str
     ws.columns.forEach((c) => (c.width = 22));
   }
 
-  await wb.xlsx.writeFile(target);
+  fs.writeFileSync(target, new Uint8Array(await wb.xlsx.writeBuffer()));
   return target;
 }
 
@@ -191,7 +192,7 @@ export function registerAcademicsIpc(ipcMain: IpcMain): void {
       ws.addRow(["ST-1000", "محمد العتيبي", "0555555555", "ذكر", "ENG-101", "المستوى الأول", "2026-02-20"]);
     }
     ws.columns.forEach((c) => (c.width = 20));
-    await wb.xlsx.writeFile(res.filePath);
+    fs.writeFileSync(res.filePath, new Uint8Array(await wb.xlsx.writeBuffer()));
     return res.filePath;
   });
 

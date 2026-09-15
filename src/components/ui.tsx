@@ -2,31 +2,19 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 /* ------------------------------ لبنات أساسية ------------------------------ */
 
-export function Panel({
-  children,
-  className = "",
-  padded = true,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  padded?: boolean;
-}) {
-  return <div className={`panel ${padded ? "p-4" : ""} ${className}`}>{children}</div>;
+export function Panel({ children, className = "", padded = true, style }: { children: React.ReactNode; className?: string; padded?: boolean; style?: React.CSSProperties }) {
+  return (
+    <div className={`panel ${padded ? "p-4" : ""} ${className}`} style={style}>
+      {children}
+    </div>
+  );
 }
 
-export function PageHeader({
-  title,
-  subtitle,
-  actions,
-}: {
-  title: string;
-  subtitle?: string;
-  actions?: React.ReactNode;
-}) {
+export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
       <div>
-        <h1 className="text-xl font-bold" style={{ color: "var(--ink)" }}>
+        <h1 className="text-[22px] font-extrabold leading-tight" style={{ color: "var(--ink)" }}>
           {title}
         </h1>
         {subtitle && (
@@ -40,17 +28,7 @@ export function PageHeader({
   );
 }
 
-export function Field({
-  label,
-  children,
-  hint,
-  className = "",
-}: {
-  label: string;
-  children: React.ReactNode;
-  hint?: string;
-  className?: string;
-}) {
+export function Field({ label, children, hint, className = "" }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
     <label className={`block ${className}`}>
       <span className="field-label">{label}</span>
@@ -64,11 +42,9 @@ export function Field({
   );
 }
 
-export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
-  function Input(props, ref) {
-    return <input ref={ref} {...props} className={`input ${props.className ?? ""}`} />;
-  },
-);
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function Input(props, ref) {
+  return <input ref={ref} {...props} className={`input ${props.className ?? ""}`} />;
+});
 
 export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} className={`input ${props.className ?? ""}`} />;
@@ -83,15 +59,13 @@ export function Button({
   size = "md",
   children,
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "default" | "primary" | "danger" | "ghost";
-  size?: "md" | "sm";
-}) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "default" | "primary" | "danger" | "ghost" | "white"; size?: "md" | "sm" }) {
   const cls = [
     "btn",
     variant === "primary" ? "btn-primary" : "",
     variant === "danger" ? "btn-danger" : "",
     variant === "ghost" ? "btn-ghost" : "",
+    variant === "white" ? "btn-white" : "",
     size === "sm" ? "btn-sm" : "",
     rest.className ?? "",
   ]
@@ -104,13 +78,23 @@ export function Button({
   );
 }
 
-export function Badge({
-  tone = "default",
-  children,
-}: {
-  tone?: "default" | "ok" | "warn" | "danger" | "accent";
-  children: React.ReactNode;
-}) {
+export function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+  return (
+    <label className="flex items-center justify-between gap-3 py-2 cursor-pointer">
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{label}</span>
+        {hint && (
+          <span className="block text-[11.5px]" style={{ color: "var(--muted)" }}>
+            {hint}
+          </span>
+        )}
+      </span>
+      <button type="button" role="switch" aria-checked={on} className={`toggle ${on ? "on" : ""}`} onClick={() => onChange(!on)} />
+    </label>
+  );
+}
+
+export function Badge({ tone = "default", children }: { tone?: "default" | "ok" | "warn" | "danger" | "accent" | "info"; children: React.ReactNode }) {
   const cls = tone === "default" ? "badge" : `badge badge-${tone}`;
   return <span className={cls}>{children}</span>;
 }
@@ -131,24 +115,14 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
   );
 }
 
-export function Stat({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: string;
-  tone?: "danger" | "ok";
-}) {
+export function Stat({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: string; tone?: "danger" | "ok" }) {
   const color = tone === "danger" ? "var(--danger)" : tone === "ok" ? "var(--ok)" : "var(--ink)";
   return (
     <Panel className="min-w-0">
       <div className="text-xs mb-1 truncate" style={{ color: "var(--muted)" }}>
         {label}
       </div>
-      <div className="text-2xl font-bold" style={{ color }}>
+      <div className="text-2xl font-extrabold" style={{ color }}>
         {value}
       </div>
       {hint && (
@@ -189,26 +163,16 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        className="panel rise w-full"
-        style={{ maxWidth: width, boxShadow: "var(--shadow)" }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-3"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
-          <h2 className="font-bold">{title}</h2>
-          <Button variant="ghost" size="sm" onClick={onClose} aria-label="إغلاق">
+      <div className="panel modal-card rise w-full" style={{ maxWidth: width }} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
+          <h2 className="font-extrabold">{title}</h2>
+          <Button variant="ghost" size="sm" className="btn-icon" onClick={onClose} aria-label="إغلاق">
             ✕
           </Button>
         </div>
         <div className="p-4">{children}</div>
         {footer && (
-          <div
-            className="flex items-center justify-end gap-2 px-4 py-3"
-            style={{ borderTop: "1px solid var(--border)" }}
-          >
+          <div className="flex items-center justify-end gap-2 px-4 py-3 flex-wrap" style={{ borderTop: "1px solid var(--border)" }}>
             {footer}
           </div>
         )}
@@ -227,10 +191,7 @@ interface UiContextValue {
   confirm: (text: string, detail?: string) => Promise<boolean>;
 }
 
-const UiContext = createContext<UiContextValue>({
-  toast: () => undefined,
-  confirm: async () => false,
-});
+const UiContext = createContext<UiContextValue>({ toast: () => undefined, confirm: async () => false });
 
 export const useUi = () => useContext(UiContext);
 
@@ -244,32 +205,24 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), 4200);
   }, []);
 
-  const confirm = useCallback(
-    (text: string, detail?: string) =>
-      new Promise<boolean>((resolve) => setRequest({ text, detail, resolve })),
-    [],
-  );
+  const confirm = useCallback((text: string, detail?: string) => new Promise<boolean>((resolve) => setRequest({ text, detail, resolve })), []);
 
   const value = useMemo(() => ({ toast, confirm }), [toast, confirm]);
 
   return (
     <UiContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-4 left-4 z-[80] flex flex-col gap-2">
+      <div className="fixed bottom-4 left-4 z-[80] flex flex-col gap-2" style={{ bottom: "calc(16px + env(safe-area-inset-bottom, 0px) + var(--toast-offset, 0px))" }}>
         {toasts.map((t) => (
           <div
             key={t.id}
             className="panel rise px-4 py-3 text-sm"
             style={{
               boxShadow: "var(--shadow)",
-              borderColor:
-                t.tone === "danger"
-                  ? "color-mix(in srgb, var(--danger) 50%, var(--border))"
-                  : t.tone === "ok"
-                    ? "color-mix(in srgb, var(--ok) 50%, var(--border))"
-                    : "var(--border)",
+              borderColor: t.tone === "danger" ? "color-mix(in srgb, var(--danger) 50%, var(--border))" : t.tone === "ok" ? "color-mix(in srgb, var(--ok) 50%, var(--border))" : "var(--border)",
               color: t.tone === "danger" ? "var(--danger)" : t.tone === "ok" ? "var(--ok)" : "var(--ink)",
               maxWidth: 420,
+              borderRadius: 18,
             }}
           >
             {t.text}
@@ -323,30 +276,23 @@ export function Toolbar({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-wrap items-end gap-2 mb-3">{children}</div>;
 }
 
-export function TabBar({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: { id: string; label: string; count?: number }[];
-  active: string;
-  onChange: (id: string) => void;
-}) {
+export function TabBar({ tabs, active, onChange }: { tabs: { id: string; label: string; count?: number }[]; active: string; onChange: (id: string) => void }) {
   return (
-    <div className="flex gap-1 flex-wrap mb-4" style={{ borderBottom: "1px solid var(--border)" }}>
+    <div className="flex gap-1 flex-wrap mb-4 p-1 rounded-full" style={{ background: "var(--panel-2)", width: "fit-content" }}>
       {tabs.map((t) => {
         const on = t.id === active;
         return (
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
-            className="px-4 py-2 text-sm rounded-t-lg"
+            className="px-4 py-1.5 text-sm rounded-full"
             style={{
-              color: on ? "var(--accent)" : "var(--muted)",
-              borderBottom: `2px solid ${on ? "var(--accent)" : "transparent"}`,
-              fontWeight: on ? 700 : 500,
-              background: on ? "color-mix(in srgb, var(--accent) 8%, transparent)" : "transparent",
+              color: on ? "var(--nav-on-ink)" : "var(--muted)",
+              background: on ? "var(--nav-on-bg)" : "transparent",
+              fontWeight: on ? 800 : 600,
               cursor: "pointer",
+              border: "none",
+              transition: "background .15s, color .15s",
             }}
           >
             {t.label}

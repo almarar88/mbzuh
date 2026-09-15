@@ -3,6 +3,7 @@
  * مع إسقاط أي أعمدة مالية عند البوابة قبل دخولها قاعدة البيانات.
  */
 import path from "node:path";
+import fs from "node:fs";
 import ExcelJS from "exceljs";
 import { getDb, logActivity } from "../db";
 import { isFinancialKey } from "./sanitiser";
@@ -105,24 +106,59 @@ export interface SheetData {
   rows: string[][];
 }
 
-async function readSheet(filePath: string): Promise<SheetData> {
-  const wb = new ExcelJS.Workbook();
-  if (path.extname(filePath).toLowerCase() === ".csv") {
-    await wb.csv.readFile(filePath);
-  } else {
-    await wb.xlsx.readFile(filePath);
+/** محلل CSV بسيط (يدعم الاقتباس والفواصل داخل الحقول والفاصلة المنقوطة). */
+function parseCsv(text: string): string[][] {
+  const clean = text.replace(/^﻿/, "");
+  const delimiter = (clean.split("\n")[0]?.match(/;/g)?.length ?? 0) > (clean.split("\n")[0]?.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (quoted) {
+      if (ch === '"' && clean[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === delimiter) {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && clean[i + 1] === "\n") i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else cell += ch;
   }
-  const ws = wb.worksheets[0];
-  if (!ws) throw new Error("الملف لا يحتوي على أي ورقة عمل.");
+  if (cell !== "" || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
 
+async function readSheet(filePath: string): Promise<SheetData> {
   const matrix: string[][] = [];
-  ws.eachRow({ includeEmpty: false }, (row) => {
-    const values: string[] = [];
-    row.eachCell({ includeEmpty: true }, (cell, col) => {
-      values[col - 1] = cellText(cell.value);
+  const bytes = fs.readFileSync(filePath);
+  if (path.extname(filePath).toLowerCase() === ".csv") {
+    for (const r of parseCsv(new TextDecoder("utf-8").decode(bytes))) matrix.push(r.map((c) => c.trim()));
+  } else {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+    const ws = wb.worksheets[0];
+    if (!ws) throw new Error("الملف لا يحتوي على أي ورقة عمل.");
+    ws.eachRow({ includeEmpty: false }, (row) => {
+      const values: string[] = [];
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        values[col - 1] = cellText(cell.value);
+      });
+      matrix.push(Array.from(values, (v) => v ?? ""));
     });
-    matrix.push(Array.from(values, (v) => v ?? ""));
-  });
+  }
   if (!matrix.length) throw new Error("الملف فارغ.");
 
   // صف العناوين = أول صف يتعرّف النظام على عمودين منه على الأقل

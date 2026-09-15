@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -14,9 +18,46 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client",
+      "node"
+    ],
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"], "@shared/*": ["shared/*"] }
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@shared/*": [
+        "shared/*"
+      ],
+      "electron": [
+        "src/platform/shims/electron.ts"
+      ],
+      "node:sqlite": [
+        "src/platform/shims/node-sqlite.ts"
+      ],
+      "node:fs": [
+        "src/platform/shims/node-fs.ts"
+      ],
+      "node:path": [
+        "src/platform/shims/node-path.ts"
+      ],
+      "node:os": [
+        "src/platform/shims/node-os.ts"
+      ]
+    }
   },
-  "include": ["src", "shared"]
+  "include": [
+    "src",
+    "shared",
+    "electron/ipc",
+    "electron/services",
+    "electron/db"
+  ],
+  "exclude": [
+    "electron/services/computer.ts",
+    "electron/services/portals.ts",
+    "electron/services/portal-tools.ts",
+    "electron/ipc/portals.ts"
+  ]
 }

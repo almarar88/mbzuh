@@ -4,8 +4,9 @@ import { useUi } from "./components/ui";
 import { Icon, type IconName } from "./components/icons";
 import type { SearchHit, TaskStats } from "@shared/types";
 import { WEEKDAY_NAMES } from "@shared/text";
+import { isMobileRuntime } from "./platform/runtime";
 import DashboardPage from "./pages/Dashboard";
-import UmsPage from "./pages/Ums";
+import PortalsPage from "./pages/Portals";
 import AssistantPage from "./pages/Assistant";
 import TasksPage from "./pages/Tasks";
 import TrainersPage from "./pages/Trainers";
@@ -20,9 +21,9 @@ import SettingsPage from "./pages/Settings";
 import logoUrl from "./assets/logo.png";
 
 export type PageId =
-  | "dashboard" | "ums" | "assistant" | "tasks"
+  | "dashboard" | "portals" | "assistant" | "tasks" | "minutes"
   | "trainers" | "courses" | "schedule" | "rooms"
-  | "partners" | "students" | "reports" | "minutes" | "settings";
+  | "partners" | "students" | "reports" | "settings";
 
 export interface NavPayload {
   page: PageId;
@@ -30,70 +31,40 @@ export interface NavPayload {
   query?: string;
 }
 
-const MODULES: { title: string; items: { id: PageId; label: string; icon: IconName; hint?: string }[] }[] = [
-  {
-    title: "مركز العمل",
-    items: [
-      { id: "dashboard", label: "الرئيسية", icon: "home" },
-      { id: "ums", label: "نظام الجامعة الموحّد UMS", icon: "globe", hint: "Ctrl 2" },
-      { id: "assistant", label: "المساعد الذكي", icon: "sparkles", hint: "Ctrl J" },
-      { id: "tasks", label: "لوحة المهام", icon: "tasks", hint: "Ctrl 4" },
-    ],
-  },
-  {
-    title: "الدورات والمدربون",
-    items: [
-      { id: "trainers", label: "سجل المدربين", icon: "users" },
-      { id: "courses", label: "منسق المستويات", icon: "book" },
-      { id: "schedule", label: "الجدول وكاشف التعارض", icon: "calendar" },
-    ],
-  },
-  {
-    title: "اللوجستيات والشركاء",
-    items: [
-      { id: "rooms", label: "القاعات والمرافق", icon: "building" },
-      { id: "partners", label: "سجل الشركاء", icon: "handshake" },
-    ],
-  },
-  {
-    title: "التقارير والأرشيف",
-    items: [
-      { id: "students", label: "الطلبة والحضور", icon: "graduate" },
-      { id: "reports", label: "مولّد التقارير", icon: "chart" },
-      { id: "minutes", label: "أرشيف المحاضر", icon: "minutes" },
-    ],
-  },
-  {
-    title: "النظام",
-    items: [{ id: "settings", label: "الإعدادات", icon: "settings" }],
-  },
+type NavItem = { id: PageId; label: string; icon: IconName; hint?: string };
+
+const CORE: NavItem[] = [
+  { id: "dashboard", label: "الرئيسية", icon: "home" },
+  { id: "portals", label: "البوابات", icon: "globe", hint: "Ctrl 2" },
+  { id: "assistant", label: "المساعد الذكي", icon: "sparkles", hint: "Ctrl J" },
+  { id: "tasks", label: "مهامي", icon: "tasks", hint: "Ctrl 4" },
+  { id: "minutes", label: "المحاضر والملاحظات", icon: "minutes" },
 ];
 
-const ENTITY_PAGE: Record<SearchHit["entity"], PageId> = {
-  trainer: "trainers",
-  course: "courses",
-  minute: "minutes",
-  partner: "partners",
-  student: "students",
-  room: "rooms",
-};
+const COURSES: NavItem[] = [
+  { id: "courses", label: "الدورات والمستويات", icon: "book" },
+  { id: "trainers", label: "المدربون", icon: "users" },
+  { id: "schedule", label: "الجدول وكاشف التعارض", icon: "calendar" },
+  { id: "rooms", label: "القاعات والحجوزات", icon: "building" },
+  { id: "partners", label: "الجهات الشريكة", icon: "handshake" },
+  { id: "students", label: "الطلبة والحضور", icon: "graduate" },
+  { id: "reports", label: "التقارير", icon: "chart" },
+];
 
-const ENTITY_LABEL: Record<SearchHit["entity"], string> = {
-  trainer: "مدرب",
-  course: "دورة",
-  minute: "محضر",
-  partner: "جهة",
-  student: "طالب",
-  room: "قاعة",
-};
+const SYSTEM: NavItem[] = [{ id: "settings", label: "الإعدادات", icon: "settings" }];
+
+const ENTITY_PAGE: Record<SearchHit["entity"], PageId> = { trainer: "trainers", course: "courses", minute: "minutes", partner: "partners", student: "students", room: "rooms" };
+const ENTITY_LABEL: Record<SearchHit["entity"], string> = { trainer: "مدرب", course: "دورة", minute: "محضر", partner: "جهة", student: "طالب", room: "قاعة" };
 
 const QUICK_ACTIONS: { label: string; page: PageId; icon: IconName }[] = [
-  { label: "فتح لوحة UMS", page: "ums", icon: "globe" },
+  { label: "افتح البوابات", page: "portals", icon: "globe" },
   { label: "اسأل المساعد الذكي", page: "assistant", icon: "sparkles" },
-  { label: "لوحة المهام", page: "tasks", icon: "tasks" },
-  { label: "إصدار تقرير", page: "reports", icon: "chart" },
+  { label: "مهامي", page: "tasks", icon: "tasks" },
   { label: "محضر جديد", page: "minutes", icon: "minutes" },
+  { label: "إصدار تقرير", page: "reports", icon: "chart" },
 ];
+
+const COURSE_PAGES = new Set<PageId>(COURSES.map((c) => c.id));
 
 function useClock() {
   const [now, setNow] = useState(new Date());
@@ -108,22 +79,42 @@ function useClock() {
       return "";
     }
   }, [now]);
-  const greg = useMemo(
-    () => new Intl.DateTimeFormat("ar-AE-u-nu-latn", { day: "numeric", month: "long", year: "numeric" }).format(now),
-    [now],
-  );
+  const greg = useMemo(() => new Intl.DateTimeFormat("ar-AE-u-nu-latn", { day: "numeric", month: "long", year: "numeric" }).format(now), [now]);
   const time = useMemo(() => new Intl.DateTimeFormat("ar-AE-u-nu-latn", { hour: "2-digit", minute: "2-digit" }).format(now), [now]);
   return { now, hijri, greg, time, weekday: WEEKDAY_NAMES[now.getDay()] };
 }
 
+/** تخطيط متجاوب: شريط جانبي كامل / شريط أيقونات / شريط سفلي (هواتف وشاشات الطي المغلقة). */
+function useLayout(): "full" | "rail" | "compact" {
+  const calc = () => (window.innerWidth < 720 ? "compact" : window.innerWidth < 1080 ? "rail" : "full");
+  const [layout, setLayout] = useState<"full" | "rail" | "compact">(calc);
+  useEffect(() => {
+    const on = () => setLayout(calc());
+    window.addEventListener("resize", on);
+    window.addEventListener("mbzuh:posture", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("mbzuh:posture", on);
+    };
+  }, []);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-layout", layout);
+  }, [layout]);
+  return layout;
+}
+
 export default function App() {
   const { toast } = useUi();
+  const mobile = isMobileRuntime();
+  const layout = useLayout();
   const [nav, setNav] = useState<NavPayload>({ page: "dashboard" });
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [orgName, setOrgName] = useState("جامعة محمد بن زايد للعلوم الإنسانية");
   const [conflictCount, setConflictCount] = useState(0);
   const [taskStats, setTaskStats] = useState<TaskStats | null>(null);
+  const [coursesOpen, setCoursesOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [cursor, setCursor] = useState(0);
@@ -134,6 +125,8 @@ export default function App() {
   const go = useCallback((page: PageId, focusId?: number, q?: string) => {
     setNav({ page, focusId, query: q });
     setPaletteOpen(false);
+    setMoreOpen(false);
+    if (COURSE_PAGES.has(page)) setCoursesOpen(true);
   }, []);
 
   useEffect(() => {
@@ -145,6 +138,7 @@ export default function App() {
       const [settings, conflicts, tasks] = await Promise.all([api.settings.all(), api.conflicts.all(), api.tasks.list()]);
       if (settings.theme === "light" || settings.theme === "dark") setTheme(settings.theme);
       if (settings.org_name) setOrgName(settings.org_name);
+      if (settings.courses_open === "1") setCoursesOpen(true);
       setConflictCount(conflicts.filter((c) => c.severity === "error").length);
       setTaskStats(tasks.stats);
     } catch {
@@ -187,21 +181,23 @@ export default function App() {
         e.preventDefault();
         go("assistant");
       }
-      if (e.key === "Escape") setPaletteOpen(false);
+      if (e.key === "Escape") {
+        setPaletteOpen(false);
+        setMoreOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [go]);
 
-  // لوحة UMS تُرسم فوق الواجهة؛ نخفيها عند فتح لوحة البحث.
+  // البوابة المدمجة تُرسم فوق الواجهة؛ نخفيها عند فتح لوحة البحث أو القائمة.
   useEffect(() => {
-    if (nav.page === "ums") void api.ums.visible(!paletteOpen);
-  }, [paletteOpen, nav.page]);
+    if (nav.page === "portals" && !mobile) void api.portal.visible(!(paletteOpen || moreOpen));
+  }, [paletteOpen, moreOpen, nav.page, mobile]);
 
   useEffect(() => {
-    if (paletteOpen) {
-      setTimeout(() => inputRef.current?.focus(), 30);
-    } else {
+    if (paletteOpen) setTimeout(() => inputRef.current?.focus(), 30);
+    else {
       setQuery("");
       setHits([]);
       setCursor(0);
@@ -211,10 +207,7 @@ export default function App() {
   useEffect(() => {
     if (!paletteOpen) return;
     const t = window.setTimeout(async () => {
-      if (query.trim().length < 1) {
-        setHits([]);
-        return;
-      }
+      if (query.trim().length < 1) return setHits([]);
       setHits(await api.search.global(query.trim()));
       setCursor(0);
     }, 140);
@@ -229,8 +222,8 @@ export default function App() {
 
   const page = useMemo(() => {
     switch (nav.page) {
-      case "ums":
-        return <UmsPage />;
+      case "portals":
+        return <PortalsPage initialId={nav.query} onNavigate={go} />;
       case "assistant":
         return <AssistantPage onNavigate={go} initialPrompt={nav.query} />;
       case "tasks":
@@ -259,88 +252,84 @@ export default function App() {
   }, [nav, go, newTaskSignal]);
 
   const openTasks = taskStats ? taskStats.todo + taskStats.doing : 0;
-  const isUms = nav.page === "ums";
+  const isPortals = nav.page === "portals";
+  const badgeFor = (id: PageId) =>
+    id === "schedule" && conflictCount > 0
+      ? { n: conflictCount, tone: "var(--danger)" }
+      : id === "tasks" && openTasks > 0
+        ? { n: openTasks, tone: taskStats && taskStats.overdue > 0 ? "var(--danger)" : "var(--c-purple)" }
+        : null;
+
+  const renderItem = (item: NavItem) => {
+    const on = nav.page === item.id;
+    const badge = badgeFor(item.id);
+    return (
+      <button key={item.id} onClick={() => go(item.id)} className={`nav-item mb-1 ${on ? "on" : ""}`} title={item.label}>
+        <span className="nav-icon">
+          <Icon name={item.icon} />
+        </span>
+        <span className="nav-label flex-1 truncate text-[13.5px]">{item.label}</span>
+        {badge && (
+          <span className="nav-badge" style={{ background: badge.tone }}>
+            {badge.n}
+          </span>
+        )}
+        {!badge && item.hint && !on && <span className="nav-hint text-[10px] opacity-50">{item.hint}</span>}
+      </button>
+    );
+  };
+
+  const bottomItems: NavItem[] = [CORE[0], CORE[1], CORE[2], CORE[3]];
+  const moreItems: NavItem[] = [CORE[4], ...COURSES, ...SYSTEM];
 
   return (
-    <div className="h-full flex">
-      <aside
-        className="w-[268px] shrink-0 flex flex-col glass"
-        style={{ borderInlineEnd: "1px solid var(--border)" }}
-      >
+    <div className="app-shell">
+      <aside className="sidebar">
         <div className="px-4 pt-4 pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
           <div className="flex items-center gap-3">
             <div
               className="flex items-center justify-center shrink-0"
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 14,
-                background: "linear-gradient(135deg, #ffffff, #f3eee3)",
-                border: "1px solid color-mix(in srgb, var(--accent) 55%, transparent)",
-                boxShadow: "0 8px 20px color-mix(in srgb, var(--accent) 30%, transparent)",
-                padding: 3,
-              }}
+              style={{ width: 46, height: 46, borderRadius: 16, background: "linear-gradient(135deg,#ffffff,#f3eee3)", padding: 3 }}
             >
-              <img src={logoUrl} alt="شعار الجامعة" width={42} height={42} style={{ display: "block" }} />
+              <img src={logoUrl} alt="شعار الجامعة" width={40} height={40} style={{ display: "block" }} />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 brand-text">
               <div className="font-extrabold leading-tight text-[15px]">منصّة الإداري</div>
               <div className="text-[11px] truncate leading-tight mt-0.5" style={{ color: "var(--muted)" }} title={orgName}>
                 {orgName}
               </div>
             </div>
           </div>
-          <button
-            className="btn btn-sm w-full mt-3 justify-between"
-            onClick={() => setPaletteOpen(true)}
-            style={{ color: "var(--muted)" }}
-          >
-            <span className="flex items-center gap-2">
-              <Icon name="search" size={14} /> بحث فوري…
-            </span>
-            <span className="text-[11px] opacity-70">Ctrl K</span>
+          <button className="search-pill mt-3 brand-text" onClick={() => setPaletteOpen(true)} style={{ padding: "9px 14px" }}>
+            <Icon name="search" size={15} />
+            <span className="flex-1 text-[13px]">بحث أو إجراء سريع…</span>
+            <span className="text-[10.5px] opacity-70">Ctrl K</span>
           </button>
         </div>
 
         <nav className="flex-1 scroll-y px-3 py-2">
-          {MODULES.map((group) => (
-            <div key={group.title} className="mb-1">
-              <div className="nav-group-title">{group.title}</div>
-              {group.items.map((item) => {
-                const on = nav.page === item.id;
-                const badge =
-                  item.id === "schedule" && conflictCount > 0
-                    ? { n: conflictCount, tone: "var(--danger)" }
-                    : item.id === "tasks" && openTasks > 0
-                      ? { n: openTasks, tone: taskStats && taskStats.overdue > 0 ? "var(--danger)" : "var(--accent)" }
-                      : null;
-                return (
-                  <button key={item.id} onClick={() => go(item.id)} className={`nav-item mb-0.5 ${on ? "on" : ""}`}>
-                    <span className="nav-icon">
-                      <Icon name={item.icon} />
-                    </span>
-                    <span className="flex-1 truncate text-[13.5px]">{item.label}</span>
-                    {badge && (
-                      <span
-                        className="text-[11px] px-1.5 rounded-full font-bold"
-                        style={{ background: badge.tone, color: "#fff", minWidth: 20, textAlign: "center" }}
-                      >
-                        {badge.n}
-                      </span>
-                    )}
-                    {!badge && item.hint && !on && (
-                      <span className="text-[10px] opacity-50">{item.hint}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          <div className="nav-group-title">مركز العمل</div>
+          {CORE.map(renderItem)}
+          <button
+            className="nav-group-title w-full"
+            style={{ background: "none", border: "none", cursor: "pointer" }}
+            onClick={async () => {
+              const next = !coursesOpen;
+              setCoursesOpen(next);
+              await api.settings.set("courses_open", next ? "1" : "0");
+            }}
+          >
+            <span>إدارة الدورات</span>
+            <Icon name="chevronDown" size={14} style={{ transform: coursesOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+          </button>
+          {(coursesOpen || layout === "rail") && COURSES.map(renderItem)}
+          <div className="nav-group-title">النظام</div>
+          {SYSTEM.map(renderItem)}
         </nav>
 
         <div className="px-3 py-3" style={{ borderTop: "1px solid var(--border)" }}>
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 sidebar-footer-text">
               <div className="text-[12.5px] font-bold truncate">
                 {clock.weekday} · {clock.time}
               </div>
@@ -357,38 +346,90 @@ export default function App() {
               <Icon name={theme === "dark" ? "sun" : "moon"} />
             </button>
           </div>
-          <div className="text-center text-[11px]" style={{ color: "var(--muted)" }}>
-            تطوير <span style={{ color: "var(--accent)", fontWeight: 700 }}>Alcode</span> · v2.0
-          </div>
         </div>
       </aside>
 
-      <main className={`flex-1 min-w-0 ${isUms ? "flex flex-col" : "scroll-y"}`}>
-        {isUms ? page : <div className="p-6 max-w-[1560px] mx-auto">{page}</div>}
+      <main className={`flex-1 min-w-0 flex flex-col ${isPortals && !mobile ? "" : "main-scroll scroll-y"}`}>
+        {/* شريط علوي للهاتف */}
+        <div className="topbar glass items-center gap-2 px-4 py-2.5 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)" }}>
+          <img src={logoUrl} alt="" width={30} height={30} style={{ background: "#fff", borderRadius: 10, padding: 2 }} />
+          <div className="min-w-0 flex-1">
+            <div className="font-extrabold text-[14px] leading-tight">منصّة الإداري</div>
+            <div className="text-[10.5px] truncate" style={{ color: "var(--muted)" }}>
+              {clock.weekday} · {clock.greg}
+            </div>
+          </div>
+          <button className="btn btn-icon btn-sm" onClick={() => setPaletteOpen(true)} title="بحث">
+            <Icon name="search" size={16} />
+          </button>
+          <button className="btn btn-icon btn-sm" onClick={toggleTheme} title="المظهر">
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
+          </button>
+        </div>
+        {isPortals && !mobile ? page : <div className="p-4 md:p-6 max-w-[1560px] mx-auto w-full">{page}</div>}
       </main>
+
+      {/* شريط سفلي للهاتف */}
+      <nav className="bottom-nav">
+        {bottomItems.map((item) => {
+          const on = nav.page === item.id;
+          const badge = badgeFor(item.id);
+          return (
+            <button key={item.id} className={`bottom-item ${on ? "on" : ""}`} onClick={() => go(item.id)}>
+              <span className="bi">
+                <Icon name={item.icon} size={20} />
+              </span>
+              <span>{item.label}</span>
+              {badge && (
+                <span className="nav-badge" style={{ background: badge.tone }}>
+                  {badge.n}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        <button className={`bottom-item ${moreItems.some((m) => m.id === nav.page) ? "on" : ""}`} onClick={() => setMoreOpen(true)}>
+          <span className="bi">
+            <Icon name="more" size={20} />
+          </span>
+          <span>المزيد</span>
+        </button>
+      </nav>
+
+      {moreOpen && (
+        <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setMoreOpen(false)}>
+          <div className="sheet">
+            <div className="sheet-handle" />
+            <div className="nav-group-title">مركز العمل</div>
+            {[CORE[4]].map(renderItem)}
+            <div className="nav-group-title">إدارة الدورات</div>
+            {COURSES.map(renderItem)}
+            <div className="nav-group-title">النظام</div>
+            {SYSTEM.map(renderItem)}
+            <div className="text-center text-[11px] mt-3" style={{ color: "var(--muted)" }}>
+              {clock.greg} · {clock.hijri} · تطوير Alcode
+            </div>
+          </div>
+        </div>
+      )}
 
       {paletteOpen && (
         <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setPaletteOpen(false)}>
-          <div className="panel pop w-full" style={{ maxWidth: 680, boxShadow: "var(--shadow)" }}>
+          <div className="panel modal-card pop w-full" style={{ maxWidth: 680 }}>
             <div className="flex items-center gap-2 px-4" style={{ borderBottom: "1px solid var(--border)" }}>
               <Icon name="search" size={18} style={{ color: "var(--muted)" }} />
               <input
                 ref={inputRef}
                 className="input"
                 style={{ border: "none", background: "transparent", padding: "14px 6px", boxShadow: "none" }}
-                placeholder="ابحث في المدربين، الدورات، المحاضر، الشركاء، الطلبة… أو اختر إجراءً سريعًا"
+                placeholder="ابحث في السجلات… أو اكتب سؤالًا للمساعد"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowDown") setCursor((c) => Math.min(c + 1, hits.length - 1));
                   if (e.key === "ArrowUp") setCursor((c) => Math.max(c - 1, 0));
-                  if (e.key === "Enter" && hits[cursor]) {
-                    const hit = hits[cursor];
-                    go(ENTITY_PAGE[hit.entity], hit.id);
-                  }
-                  if (e.key === "Enter" && !hits.length && query.trim()) {
-                    go("assistant", undefined, query.trim());
-                  }
+                  if (e.key === "Enter" && hits[cursor]) go(ENTITY_PAGE[hits[cursor].entity], hits[cursor].id);
+                  if (e.key === "Enter" && !hits.length && query.trim()) go("assistant", undefined, query.trim());
                 }}
               />
               <span className="text-[11px] opacity-60">Esc</span>
@@ -407,11 +448,10 @@ export default function App() {
                 <p className="p-6 pt-2 text-center text-sm" style={{ color: "var(--muted)" }}>
                   {query ? (
                     <>
-                      لا توجد نتائج مطابقة. اضغط Enter لسؤال{" "}
-                      <span style={{ color: "var(--accent)" }}>المساعد الذكي</span> عن «{query}».
+                      لا توجد نتائج مطابقة. اضغط Enter لسؤال <span style={{ color: "var(--accent)" }}>المساعد الذكي</span> عن «{query}».
                     </>
                   ) : (
-                    "اكتب كلمة للبحث في كل وحدات النظام."
+                    "اكتب كلمة للبحث في كل السجلات، أو اختر إجراءً سريعًا."
                   )}
                 </p>
               ) : (
@@ -421,14 +461,9 @@ export default function App() {
                     onMouseEnter={() => setCursor(i)}
                     onClick={() => go(ENTITY_PAGE[hit.entity], hit.id)}
                     className="w-full text-start px-4 py-2.5 flex items-start gap-3"
-                    style={{
-                      background: i === cursor ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      borderBottom: "1px solid color-mix(in srgb, var(--border) 60%, transparent)",
-                    }}
+                    style={{ background: i === cursor ? "var(--panel-2)" : "transparent", border: "none", cursor: "pointer", borderBottom: "1px solid color-mix(in srgb, var(--border) 60%, transparent)" }}
                   >
-                    <span className="badge badge-accent mt-0.5">{ENTITY_LABEL[hit.entity]}</span>
+                    <span className="badge badge-info mt-0.5">{ENTITY_LABEL[hit.entity]}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold text-sm truncate" style={{ color: "var(--ink)" }}>
                         {hit.title}
