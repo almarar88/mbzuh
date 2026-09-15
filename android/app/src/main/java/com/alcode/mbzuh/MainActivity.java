@@ -200,13 +200,14 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         webView.onResume();
-        webView.resumeTimers();
     }
 
     @Override
     protected void onPause() {
+        // ملاحظة: لا نستدعي pauseTimers() لأنه يوقف مؤقتات JavaScript في كل WebView بالعملية
+        // (بما فيها شاشة البوابة) فتتجمّد Outlook/Teams، ويوقف المساعد الذي يعمل هنا أثناء
+        // فتح البوابة. نكتفي بحفظ البيانات.
         webView.evaluateJavascript("window.dispatchEvent(new Event('pagehide'))", null);
-        webView.pauseTimers();
         webView.onPause();
         super.onPause();
     }

@@ -24,7 +24,7 @@ type Draft = Partial<Task> & { title: string };
 
 const emptyDraft = (): Draft => ({ title: "", description: "", priority: "normal", status: "todo", due_date: "", tags: "" });
 
-export default function TasksPage({ newTaskSignal, onNavigate }: { newTaskSignal: number; onNavigate: (p: PageId) => void }) {
+export default function TasksPage({ newTaskSignal, onNavigate }: { newTaskSignal: number; onNavigate: (p: PageId, id?: number, q?: string) => void }) {
   const { toast, confirm } = useUi();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<TaskStats | null>(null);
@@ -253,6 +253,30 @@ export default function TasksPage({ newTaskSignal, onNavigate }: { newTaskSignal
                               <Icon name="sparkles" size={11} />
                             </span>
                           )}
+                          {t.source_url && (
+                            <button
+                              className="badge badge-info"
+                              style={{ fontSize: 11, cursor: "pointer", border: "none" }}
+                              title={t.source_url}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNavigate("portals", undefined, `${t.source_portal ?? "outlook"}|${t.source_url}`);
+                              }}
+                            >
+                              <Icon name="external" size={11} /> المصدر
+                            </button>
+                          )}
+                          <button
+                            className="badge"
+                            style={{ fontSize: 11, cursor: "pointer", border: "none" }}
+                            title="اطلب من المساعد العمل على هذه المهمة"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigate("assistant", undefined, `ساعدني في إنجاز هذه المهمة (رقم ${t.id}): «${t.title}»${t.description ? ` — ${t.description}` : ""}${t.due_date ? ` — الاستحقاق ${t.due_date}` : ""}. اقترح الخطوات، ونفّذ ما يمكن تنفيذه عبر البوابات، وحدّث حالة المهمة عند الانتهاء.`);
+                            }}
+                          >
+                            <Icon name="sparkles" size={11} /> المساعد
+                          </button>
                         </div>
                       </div>
                     </div>

@@ -10,10 +10,14 @@ import { registerLogisticsIpc } from "../../electron/ipc/logistics";
 import { registerAcademicsIpc } from "../../electron/ipc/academics";
 import { registerWorkspaceIpc } from "../../electron/ipc/workspace";
 import { registerAssistantIpc } from "../../electron/ipc/assistant";
+import { registerExtraTools } from "../../electron/services/ai";
+import { portalTools } from "../../electron/services/portal-tools";
+import { createMobilePortalDriver } from "./portal-driver-mobile";
 import { autoBackup, getDb, getSetting, setSetting } from "../../electron/db";
 import { isEmptyDatabase, seedDemoData } from "../../electron/db/seed";
 import { DARK_CSS, MODERN_CSS } from "../../shared/ums-theme";
-import { AUTOFILL_JS, isPortalInternalUrl, normalizeUrl, parsePortals, type PortalConfig, type PortalCredential, type PortalsState } from "../../shared/portals";
+import { AUTOFILL_JS, normalizeUrl, parsePortals, type PortalConfig, type PortalCredential, type PortalsState } from "../../shared/portals";
+import type { AiChatContext, AiStreamEvent } from "../../shared/types";
 import { installPostureBridge, isAndroidRuntime } from "./runtime";
 import { nativeOpenExternal, nativeToast } from "./native";
 
@@ -62,31 +66,78 @@ function credSummary() {
   return out;
 }
 
+/** يفتح بوابة في الشاشة الأصلية (مع المظهر والتعبئة التلقائية)، اختياريًا على رابط محدد. */
+function openNativePortal(id: string, url?: string): PortalConfig {
+  const p = portalList().find((x) => x.id === id);
+  if (!p) throw new Error("بوابة غير معروفة");
+  activePortal = p.id;
+  const bridge = window.AndroidBridge;
+  const target = url && url.startsWith("http") ? url : p.url;
+  if (bridge) {
+    const css = p.theme === "modern" ? MODERN_CSS : "";
+    const dark = p.theme === "modern" && p.dark ? DARK_CSS : "";
+    const cred = readCreds()[p.id];
+    const autofill = cred?.autofill && cred.username ? AUTOFILL_JS(cred.username, cred.password, cred.autoSubmit) : "";
+    bridge.openPortal(target, p.name, css, dark, p.dark, JSON.stringify({ id: p.id, home: p.url, autofill }));
+  } else {
+    // متصفح عادي (للاختبار): نفتح في تبويب جديد
+    window.open(target, "_blank", "noopener");
+  }
+  return p;
+}
+
+/**
+ * شريط الأوامر داخل البوابة الأصلية: الطبقة الأصلية تستدعي __mbzuhPortalCommand بنص الأمر،
+ * فنشغّل المحادثة هنا (بأدوات البوابات) ونعيد أحداث البث إلى الشاشة الأصلية.
+ */
+function installPortalCommandBridge(): void {
+  let currentJob: string | null = null;
+  window.__mbzuhPortalCommand = (portalId: string, text: string) => {
+    const bridge = window.AndroidBridge;
+    const p = portalList().find((x) => x.id === portalId);
+    const jobId = `pc${Date.now().toString(36)}`;
+    currentJob = jobId;
+    const context: AiChatContext = { scope: "portal", portalId, portalName: p?.name };
+    try {
+      const i = JSON.parse(bridge?.portalInfo?.() || "{}") as { url?: string; title?: string };
+      context.url = i.url;
+      context.title = i.title;
+    } catch {
+      /* لا معلومات */
+    }
+    const off = window.dynamo.on("app:ai", (raw) => {
+      const ev = raw as AiStreamEvent;
+      if (ev.jobId !== jobId) return;
+      if (ev.type !== "screenshot") bridge?.portalAssistantEvent?.(JSON.stringify(ev));
+      if (ev.type === "done" || ev.type === "error" || ev.type === "refusal") {
+        off();
+        if (currentJob === jobId) currentJob = null;
+      }
+    });
+    void handlers.get("ai:chat")?.(null, `portal-${portalId}`, jobId, text, context);
+  };
+  window.__mbzuhPortalApprove = (requestId: string, ok: boolean) => {
+    void handlers.get("ai:approve")?.(null, requestId, ok);
+  };
+  window.__mbzuhPortalCancel = () => {
+    if (currentJob) void handlers.get("ai:cancel")?.(null, currentJob);
+  };
+}
+
 function registerMobilePortals(): void {
+  registerExtraTools(() => portalTools(createMobilePortalDriver(portalList, (id, url) => void openNativePortal(id, url))));
+  installPortalCommandBridge();
   fakeIpc.handle("portal:state", () => portalState(activePortal));
   fakeIpc.handle("portal:save", (_e, list) => {
     const clean = (list as PortalConfig[]).filter((p) => p.id && p.url).map((p) => ({ ...p, url: normalizeUrl(p.url) }));
     setSetting("portals", JSON.stringify(clean));
     return portalState(activePortal);
   });
-  fakeIpc.handle("portal:open", (_e, id) => {
-    const p = portalList().find((x) => x.id === id);
-    if (!p) throw new Error("بوابة غير معروفة");
-    activePortal = p.id;
-    const bridge = window.AndroidBridge;
-    if (bridge) {
-      const css = p.theme === "modern" ? MODERN_CSS : "";
-      const dark = p.theme === "modern" && p.dark ? DARK_CSS : "";
-      const cred = readCreds()[p.id];
-      const autofill = cred?.autofill && cred.username ? AUTOFILL_JS(cred.username, cred.password, cred.autoSubmit) : "";
-      bridge.openPortal(p.url, p.name, css, dark, p.dark, JSON.stringify({ home: p.url, autofill }));
-    } else {
-      // متصفح عادي (للاختبار): نفتح في تبويب جديد
-      window.open(p.url, "_blank", "noopener");
-    }
+  fakeIpc.handle("portal:open", (_e, id, opts) => {
+    openNativePortal(String(id), (opts as { url?: string } | undefined)?.url);
     return portalState(activePortal);
   });
-  for (const ch of ["portal:bounds", "portal:hide", "portal:visible", "portal:navigate", "portal:zoom"]) {
+  for (const ch of ["portal:bounds", "portal:hide", "portal:visible", "portal:navigate", "portal:zoom", "portal:trustCert"]) {
     fakeIpc.handle(ch, () => portalState(activePortal));
   }
   fakeIpc.handle("portal:theme", (_e, id, theme, dark) => {
@@ -114,7 +165,6 @@ function registerMobilePortals(): void {
     nativeToast("تم مسح جلسة البوابات");
     return true;
   });
-  void isPortalInternalUrl;
 }
 
 /* ------------------------------ الإقلاع ------------------------------ */

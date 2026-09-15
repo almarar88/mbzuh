@@ -26,6 +26,7 @@ export function registerPortalsIpc(ipcMain: IpcMain): void {
     portals.openExternal(id);
     return true;
   });
+  ipcMain.handle("portal:trustCert", (_e, id: string) => portals.trustCertificate(id));
   ipcMain.handle("portal:credentials", () => credentialSummary());
   ipcMain.handle("portal:setCredential", (_e, id: string, cred: PortalCredential | null) => {
     const all = readCredentials();

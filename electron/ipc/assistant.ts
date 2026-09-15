@@ -4,16 +4,25 @@ import { app, dialog } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  addMemory,
   cancelJob,
   chat,
   deleteChat,
+  deleteMemory,
+  deleteRoutine,
   extractTasks,
   getAiSettings,
+  getBrief,
   getChatTranscript,
   listChats,
+  listMemory,
+  listRoutines,
   resolveApproval,
+  runBrief,
+  runRoutine,
   runTemplate,
   saveApiKey,
+  saveRoutine,
   saveTranscript,
   setApprovalHandler,
   testConnection,
@@ -21,7 +30,7 @@ import {
 } from "../services/ai";
 import { createTask, deleteTask, listTasks, reorderTasks, taskStats, updateTask } from "../services/tasks";
 import { setSetting } from "../db";
-import type { AiStreamEvent, AiTemplateInput, Task, TaskStatus } from "../../shared/types";
+import type { AiChatContext, AiRoutine, AiStreamEvent, AiTemplateInput, Task, TaskStatus } from "../../shared/types";
 
 export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserWindow | null): void {
   const emit = (event: AiStreamEvent) => {
@@ -63,8 +72,8 @@ export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserW
   ipcMain.handle("ai:test", () => testConnection());
   ipcMain.handle("ai:templates", () => TEMPLATE_LABELS);
 
-  ipcMain.handle("ai:chat", (_e, chatId: string, jobId: string, text: string) => {
-    void chat(chatId, jobId, text, emit);
+  ipcMain.handle("ai:chat", (_e, chatId: string, jobId: string, text: string, context?: AiChatContext) => {
+    void chat(chatId, jobId, text, emit, context);
     return jobId;
   });
   ipcMain.handle("ai:template", (_e, jobId: string, input: AiTemplateInput) => {
@@ -98,6 +107,30 @@ export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserW
     if (res.canceled || !res.filePath) return null;
     fs.writeFileSync(res.filePath, text, "utf8");
     return res.filePath;
+  });
+
+  /* ------------------------------ الذاكرة والروتينات والموجز ------------------------------ */
+
+  ipcMain.handle("ai:memory", () => listMemory());
+  ipcMain.handle("ai:memoryAdd", (_e, fact: string) => addMemory(fact, "user"));
+  ipcMain.handle("ai:memoryDelete", (_e, id: number) => deleteMemory(id));
+
+  ipcMain.handle("ai:routines", () => listRoutines());
+  ipcMain.handle("ai:routineSave", (_e, input: Partial<AiRoutine> & { name: string; prompt: string }) => saveRoutine(input));
+  ipcMain.handle("ai:routineDelete", (_e, id: number) => deleteRoutine(id));
+  ipcMain.handle("ai:routineRun", (_e, id: number, jobId: string) => {
+    void runRoutine(id, jobId, emit).then((res) => {
+      const win = getWindow();
+      const r = listRoutines().find((x) => x.id === id);
+      if (win && !win.isDestroyed() && r) win.webContents.send("app:routine", { id, name: r.name, ok: res.ok, summary: res.text.slice(0, 200) });
+    });
+    return jobId;
+  });
+
+  ipcMain.handle("ai:brief", (_e, day?: string) => getBrief(day));
+  ipcMain.handle("ai:briefRun", (_e, jobId: string) => {
+    void runBrief(jobId, emit);
+    return jobId;
   });
 
   /* ------------------------------ المهام ------------------------------ */

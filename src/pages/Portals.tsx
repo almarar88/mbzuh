@@ -1,26 +1,37 @@
 /**
  * البوابات الجامعية: UMS، لوحة الدورات Hub، Outlook، Teams، SharePoint، OneHub، وأي بوابة يضيفها المستخدم.
  * - سطح المكتب: تُعرض داخل التطبيق عبر WebContentsView (هذه الواجهة ترسم التبويبات
- *   وشريط الأدوات وتبلّغ العملية الرئيسية بمساحة العرض).
- * - الجوال: تُفتح في متصفح أصلي داخل التطبيق مع حقن المظهر الحديث.
+ *   وشريط الأدوات و«المساعد داخل البوابة» وتبلّغ العملية الرئيسية بمساحة العرض).
+ * - الجوال: تُفتح في متصفح أصلي داخل التطبيق مع حقن المظهر الحديث وشريط أوامر ذكي.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Button, useUi } from "../components/ui";
 import { Icon } from "../components/icons";
+import { PortalCopilot } from "../components/PortalCopilot";
 import { PORTAL_COLORS, type PortalConfig, type PortalsState } from "@shared/portals";
 import { isMobileRuntime } from "../platform/runtime";
 import logoUrl from "../assets/logo.png";
 import type { PageId } from "../App";
 
-export default function PortalsPage({ initialId, onNavigate }: { initialId?: string; onNavigate: (p: PageId) => void }) {
+/** initialId قد يكون «معرّف» أو «معرّف|رابط» لفتح صفحة محددة (مثل مصدر مهمة). */
+function parseInitial(initial?: string): { id?: string; url?: string } {
+  if (!initial) return {};
+  const i = initial.indexOf("|");
+  return i < 0 ? { id: initial } : { id: initial.slice(0, i), url: initial.slice(i + 1) };
+}
+
+export default function PortalsPage({ initialId, onNavigate }: { initialId?: string; onNavigate: (p: PageId, id?: number, q?: string) => void }) {
   const { toast } = useUi();
   const mobile = isMobileRuntime();
   const hostRef = useRef<HTMLDivElement>(null);
+  const initial = useMemo(() => parseInitial(initialId), [initialId]);
   const [state, setState] = useState<PortalsState | null>(null);
   const [urlDraft, setUrlDraft] = useState("");
   const [editingUrl, setEditingUrl] = useState(false);
-  const [launcher, setLauncher] = useState(!initialId);
+  const [launcher, setLauncher] = useState(!initial.id);
+  const [copilot, setCopilot] = useState(() => localStorage.getItem("portal_copilot") !== "0");
+  const [dock, setDock] = useState<"side" | "bottom">(() => (window.innerWidth >= 1180 ? "side" : "bottom"));
 
   const rect = () => {
     const r = hostRef.current?.getBoundingClientRect();
@@ -28,25 +39,30 @@ export default function PortalsPage({ initialId, onNavigate }: { initialId?: str
   };
 
   const open = useCallback(
-    async (id: string) => {
+    async (id: string, url?: string) => {
       setLauncher(false);
       if (mobile) {
-        setState(await api.portal.open(id));
+        setState(await api.portal.open(id, url ? ({ url } as never) : undefined));
         return;
       }
       // ننتظر إطارًا حتى يُرسم الحاوي بعد إغلاق شاشة الاختيار
       await new Promise((r) => requestAnimationFrame(() => r(null)));
-      setState(await api.portal.open(id, rect()));
+      const s = await api.portal.open(id, rect());
+      setState(s);
+      if (url) setState(await api.portal.navigate("url", url));
     },
     [mobile],
   );
 
   useEffect(() => {
     void api.portal.state().then(setState);
-    if (initialId) void open(initialId);
+    if (initial.id) void open(initial.id, initial.url);
     const off = window.dynamo.on("app:portals", (s) => setState(s as PortalsState));
+    const onResize = () => setDock(window.innerWidth >= 1180 ? "side" : "bottom");
+    window.addEventListener("resize", onResize);
     return () => {
       off();
+      window.removeEventListener("resize", onResize);
       if (!mobile) void api.portal.hide();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,12 +79,16 @@ export default function PortalsPage({ initialId, onNavigate }: { initialId?: str
       ro.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [mobile, launcher]);
+  }, [mobile, launcher, copilot, dock]);
 
   // إظهار شاشة الاختيار يخفي العرض المدمج
   useEffect(() => {
     if (!mobile) void api.portal.visible(!launcher);
   }, [launcher, mobile]);
+
+  useEffect(() => {
+    localStorage.setItem("portal_copilot", copilot ? "1" : "0");
+  }, [copilot]);
 
   const active = useMemo(() => state?.portals.find((p) => p.id === state.active) ?? null, [state]);
   const tab = useMemo(() => state?.tabs.find((t) => t.id === state.active) ?? null, [state]);
@@ -105,7 +125,7 @@ export default function PortalsPage({ initialId, onNavigate }: { initialId?: str
           <div>
             <h1 className="text-2xl font-extrabold">البوابات</h1>
             <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-              كل أنظمة الجامعة في مكان واحد بجلسة دخول موحّدة. {mobile ? "تُفتح داخل التطبيق بمظهر حديث." : "تُعرض داخل التطبيق ويمكن للمساعد الذكي قراءتها والتحكم فيها."}
+              كل أنظمة الجامعة في مكان واحد بجلسة دخول موحّدة. {mobile ? "تُفتح داخل التطبيق بمظهر حديث ومعها شريط أوامر للمساعد الذكي." : "تُعرض داخل التطبيق ومعها المساعد الذكي يقرأ الصفحة وينفّذ أوامرك عليها."}
             </p>
           </div>
           <div className="flex gap-2">
@@ -184,10 +204,7 @@ export default function PortalsPage({ initialId, onNavigate }: { initialId?: str
                   cursor: "pointer",
                 }}
               >
-                <span
-                  className="inline-flex items-center justify-center rounded-full"
-                  style={{ width: 18, height: 18, background: on ? "rgba(0,0,0,.15)" : c.bg, color: on ? c.ink : c.ink, fontSize: 10 }}
-                >
+                <span className="inline-flex items-center justify-center rounded-full" style={{ width: 18, height: 18, background: on ? "rgba(0,0,0,.15)" : c.bg, color: c.ink, fontSize: 10 }}>
                   {p.glyph}
                 </span>
                 <span className="truncate" style={{ maxWidth: 120 }}>
@@ -251,8 +268,13 @@ export default function PortalsPage({ initialId, onNavigate }: { initialId?: str
               <Icon name={active.dark ? "sun" : "moon"} />
             </Button>
           )}
-          <Button size="sm" variant="ghost" className="btn-icon" title="اسأل المساعد عن هذه الصفحة" onClick={() => onNavigate("assistant")}>
-            <Icon name="sparkles" />
+          <Button
+            size="sm"
+            variant={copilot ? "primary" : "ghost"}
+            title={copilot ? "إخفاء المساعد" : "المساعد داخل البوابة (أوامر تُنفَّذ على هذه الصفحة)"}
+            onClick={() => setCopilot((v) => !v)}
+          >
+            <Icon name="sparkles" size={15} /> المساعد
           </Button>
           <Button size="sm" variant="ghost" className="btn-icon" title="فتح في المتصفح" onClick={() => void api.portal.openExternal()}>
             <Icon name="external" />
@@ -260,34 +282,62 @@ export default function PortalsPage({ initialId, onNavigate }: { initialId?: str
         </div>
       </div>
 
-      <div ref={hostRef} className="flex-1 relative min-h-0">
-        <div className="absolute inset-0 flex items-center justify-center p-8" style={{ zIndex: 0 }}>
-          {tab?.error ? (
-            <div className="panel p-6 max-w-md text-center pop">
-              <div className="tool-icon mx-auto" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
-                !
+      <div className={`flex-1 min-h-0 flex ${dock === "side" ? "flex-row" : "flex-col"}`}>
+        <div ref={hostRef} className="flex-1 relative min-h-0 min-w-0">
+          <div className="absolute inset-0 flex items-center justify-center p-8" style={{ zIndex: 0 }}>
+            {tab?.certIssue ? (
+              <div className="panel p-6 max-w-lg text-center pop">
+                <div className="tool-icon mx-auto" style={{ background: "var(--warn-soft)", color: "var(--warn)" }}>
+                  <Icon name="shield" size={20} />
+                </div>
+                <h3 className="font-bold mb-1">شهادة الأمان لموقع {tab.certIssue.host} غير موثوقة على هذا الجهاز</h3>
+                <p className="text-sm mb-1" style={{ color: "var(--muted)" }}>
+                  هذا يحدث عادةً مع الأنظمة الداخلية التي تستخدم شهادة صادرة من الجامعة نفسها. جهة الإصدار: {tab.certIssue.issuer} ({tab.certIssue.error}).
+                </p>
+                <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>
+                  إن كنت متأكدًا أن هذا هو موقع الجامعة (يعمل لديك في المتصفح المعتاد)، يمكنك الوثوق بهذه الشهادة تحديدًا؛ سيُحفظ القرار لهذا الموقع فقط.
+                </p>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <Button
+                    variant="primary"
+                    onClick={async () => {
+                      if (active) setState(await api.portal.trustCert(active.id));
+                      toast("تم الوثوق بالشهادة وإعادة التحميل", "ok");
+                    }}
+                  >
+                    <Icon name="check" size={14} /> الوثوق بالشهادة والمتابعة
+                  </Button>
+                  <Button onClick={() => void api.portal.openExternal()}>فتح في المتصفح</Button>
+                </div>
               </div>
-              <h3 className="font-bold mb-1">تعذّر الوصول إلى {active?.name}</h3>
-              <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
-                {tab.error}
-              </p>
-              <div className="flex gap-2 justify-center">
-                <Button variant="primary" onClick={() => void nav("reload")}>
-                  إعادة المحاولة
-                </Button>
-                <Button onClick={() => void api.portal.openExternal()}>فتح في المتصفح</Button>
+            ) : tab?.error ? (
+              <div className="panel p-6 max-w-md text-center pop">
+                <div className="tool-icon mx-auto" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                  !
+                </div>
+                <h3 className="font-bold mb-1">تعذّر الوصول إلى {active?.name}</h3>
+                <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
+                  {tab.error}
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button variant="primary" onClick={() => void nav("reload")}>
+                    إعادة المحاولة
+                  </Button>
+                  <Button onClick={() => void api.portal.openExternal()}>فتح في المتصفح</Button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="text-center">
-              <img src={logoUrl} alt="" width={110} height={110} className="mx-auto mb-4 float" style={{ opacity: 0.85 }} />
-              <div className="skeleton mx-auto mb-3" style={{ width: 240, height: 14 }} />
-              <p className="text-sm mt-4" style={{ color: "var(--muted)" }}>
-                جارٍ تحميل {active?.name ?? "البوابة"}…
-              </p>
-            </div>
-          )}
+            ) : (
+              <div className="text-center">
+                <img src={logoUrl} alt="" width={110} height={110} className="mx-auto mb-4 float" style={{ opacity: 0.85 }} />
+                <div className="skeleton mx-auto mb-3" style={{ width: 240, height: 14 }} />
+                <p className="text-sm mt-4" style={{ color: "var(--muted)" }}>
+                  جارٍ تحميل {active?.name ?? "البوابة"}…
+                </p>
+              </div>
+            )}
+          </div>
         </div>
+        {copilot && active && <PortalCopilot key={active.id} portal={active} url={tab?.url ?? active.url} title={tab?.title ?? ""} dock={dock} onClose={() => setCopilot(false)} />}
       </div>
     </div>
   );
@@ -296,11 +346,7 @@ export default function PortalsPage({ initialId, onNavigate }: { initialId?: str
 export function PortalCard({ portal, live, onOpen, compact }: { portal: PortalConfig; live?: { title: string; loading: boolean; error: string | null }; onOpen: () => void; compact?: boolean }) {
   const c = PORTAL_COLORS[portal.color];
   return (
-    <button
-      onClick={onOpen}
-      className="portal-card text-start"
-      style={{ background: c.bg, color: c.ink, minHeight: compact ? 96 : 150 }}
-    >
+    <button onClick={onOpen} className="portal-card text-start" style={{ background: c.bg, color: c.ink, minHeight: compact ? 96 : 150 }}>
       <div className="flex items-start justify-between">
         <span className="portal-glyph" style={{ background: "rgba(255,255,255,.55)", color: c.ink }}>
           {portal.glyph}
@@ -313,7 +359,7 @@ export function PortalCard({ portal, live, onOpen, compact }: { portal: PortalCo
         <div className="font-extrabold text-[15px] leading-snug">{portal.name}</div>
         {!compact && (
           <div className="text-[12px] mt-0.5" style={{ opacity: 0.75 }}>
-            {live?.title && !live.loading ? live.title : portal.hint ?? portal.url.replace(/^https?:\/\//, "")}
+            {live?.error ? "⚠ " + live.error.split("(")[0] : live?.title && !live.loading ? live.title : (portal.hint ?? portal.url.replace(/^https?:\/\//, ""))}
           </div>
         )}
       </div>

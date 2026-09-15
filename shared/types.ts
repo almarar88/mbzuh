@@ -309,6 +309,9 @@ export interface Task {
   due_date: string | null;
   tags: string | null;
   source: string | null;
+  /** رابط المصدر (رسالة بريد، صفحة في بوابة…) ومعرّف البوابة، إن أُنشئت المهمة من بوابة. */
+  source_url: string | null;
+  source_portal: string | null;
   position: number;
   created_at: string;
   updated_at: string;
@@ -353,6 +356,43 @@ export interface AiSettings {
 }
 
 /** الحدث المبثوث من العملية الرئيسية أثناء توليد رد. */
+/** سياق يُرفق بالمحادثة: البوابة والصفحة التي يعمل فيها المستخدم الآن، ونوع المحادثة. */
+export interface AiChatContext {
+  scope?: "chat" | "portal" | "routine" | "brief";
+  portalId?: string;
+  portalName?: string;
+  url?: string;
+  title?: string;
+}
+
+export interface AiMemoryFact {
+  id: number;
+  fact: string;
+  source: string | null;
+  created_at: string;
+}
+
+export interface AiRoutine {
+  id: number;
+  name: string;
+  prompt: string;
+  /** HH:MM بالتوقيت المحلي، أو null للتشغيل اليدوي فقط. */
+  schedule_time: string | null;
+  /** أيام الأسبوع المسموحة (0 = الأحد) مفصولة بفاصلة. */
+  weekdays: string;
+  enabled: number;
+  last_run_at: string | null;
+  last_ok: number | null;
+  last_result: string | null;
+  created_at: string;
+}
+
+export interface AiBrief {
+  day: string;
+  text: string;
+  created_at: string;
+}
+
 export type AiStreamEvent =
   | { jobId: string; type: "text"; text: string }
   | { jobId: string; type: "tool"; name: string; label: string; phase: "start" | "end"; ok?: boolean }

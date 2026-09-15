@@ -1,6 +1,10 @@
 /** غلاف مُنمَّط حول جسر IPC المكشوف من العملية الرئيسية. */
 import type {
   AcademicReport,
+  AiBrief,
+  AiChatContext,
+  AiMemoryFact,
+  AiRoutine,
   AiSettings,
   AiTemplateInput,
   AttendanceStatus,
@@ -272,7 +276,7 @@ export const api = {
     approve: (requestId: string, ok: boolean) => call<boolean>("ai:approve", requestId, ok),
     test: () => call<{ ok: boolean; message: string; model: string }>("ai:test"),
     templates: () => call<Record<string, string>>("ai:templates"),
-    chat: (chatId: string, jobId: string, text: string) => call<string>("ai:chat", chatId, jobId, text),
+    chat: (chatId: string, jobId: string, text: string, context?: AiChatContext) => call<string>("ai:chat", chatId, jobId, text, context),
     template: (jobId: string, input: AiTemplateInput) => call<string>("ai:template", jobId, input),
     cancel: (jobId: string) => call<boolean>("ai:cancel", jobId),
     extractTasks: (text: string, mode: "goal" | "text") =>
@@ -283,6 +287,15 @@ export const api = {
       call<boolean>("ai:saveTranscript", chatId, title, transcript),
     deleteChat: (chatId: string) => call<boolean>("ai:deleteChat", chatId),
     saveText: (suggested: string, text: string) => call<string | null>("ai:saveText", suggested, text),
+    memory: () => call<AiMemoryFact[]>("ai:memory"),
+    memoryAdd: (fact: string) => call<AiMemoryFact[]>("ai:memoryAdd", fact),
+    memoryDelete: (id: number) => call<AiMemoryFact[]>("ai:memoryDelete", id),
+    routines: () => call<AiRoutine[]>("ai:routines"),
+    routineSave: (input: Partial<AiRoutine> & { name: string; prompt: string }) => call<AiRoutine[]>("ai:routineSave", input),
+    routineDelete: (id: number) => call<AiRoutine[]>("ai:routineDelete", id),
+    routineRun: (id: number, jobId: string) => call<string>("ai:routineRun", id, jobId),
+    brief: (day?: string) => call<AiBrief | null>("ai:brief", day),
+    briefRun: (jobId: string) => call<string>("ai:briefRun", jobId),
   },
   portal: {
     state: () => call<PortalsState>("portal:state"),
@@ -297,6 +310,7 @@ export const api = {
     theme: (id: string, theme: "modern" | "original", dark: boolean) => call<PortalsState>("portal:theme", id, theme, dark),
     openExternal: (id?: string) => call<boolean>("portal:openExternal", id),
     clearSession: () => call<boolean>("portal:clearSession"),
+    trustCert: (id: string) => call<PortalsState>("portal:trustCert", id),
     credentials: () => call<Record<string, { username: string; autofill: boolean; hasPassword: boolean }>>("portal:credentials"),
     setCredential: (id: string, cred: PortalCredential | null) =>
       call<Record<string, { username: string; autofill: boolean; hasPassword: boolean }>>("portal:setCredential", id, cred),

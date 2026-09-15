@@ -1,28 +1,36 @@
 /**
- * المساعد الذكي — يعمل في العملية الرئيسية عبر Anthropic SDK.
+ * المساعد الذكي — يعمل في العملية الرئيسية (أو داخل المتصفح على الجوال) عبر Anthropic SDK.
  *
  * - المفتاح يُخزَّن محليًا مشفّرًا بـ safeStorage (DPAPI على ويندوز) ولا يغادر الجهاز
  *   إلا إلى واجهة Claude API.
  * - المحادثة تدعم «أدوات» تقرأ بيانات التطبيق (الإحصاءات، البحث، التعارضات، المهام،
- *   المحاضر) وتُنشئ مهامًا — بموافقة ضمنية لأن المستخدم هو من يطلب.
+ *   المحاضر) وتُنشئ مهامًا وتحدّثها، وتتذكّر حقائق عن المستخدم (الذاكرة)، إضافة إلى
+ *   أدوات البوابات والتحكم بالكمبيوتر المسجَّلة من المنصة.
  * - كل رد يُبثّ تدريجيًا إلى الواجهة عبر القناة app:ai.
+ * - الروتينات: أوامر محفوظة تُنفَّذ يدويًا أو في وقت محدد يوميًا، والموجز اليومي يجمع
+ *   البريد والاجتماعات والمهام في نص واحد.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { safeStorage } from "electron";
 import { getDb, getSetting, logActivity, setSetting } from "../db";
 import { dashboardStats, globalSearch } from "./stats";
 import { detectAllConflicts } from "./conflicts";
-import { createTask, listTasks, taskStats } from "./tasks";
+import { createTask, getTask, listTasks, taskStats, updateTask } from "./tasks";
 import { todayISO, WEEKDAY_NAMES } from "../../shared/text";
 import { LANGUAGE_LABELS, LEVEL_LABELS } from "../../shared/labels";
 import type {
+  AiBrief,
+  AiChatContext,
   AiEffort,
+  AiMemoryFact,
+  AiRoutine,
   AiSettings,
   AiStreamEvent,
   AiTemplateId,
   AiTemplateInput,
   ExtractedTask,
   TaskPriority,
+  TaskStatus,
 } from "../../shared/types";
 
 const DEFAULT_MODEL = "claude-opus-5";
@@ -78,8 +86,8 @@ export function getAiSettings(): AiSettings {
     adminName: getSetting("ai_admin_name", ""),
     adminTitle: getSetting("ai_admin_title", ""),
     encrypted: getSetting(KEY_ENC_SETTING, "").length > 0,
-    computerControl: getSetting("ai_computer", "0") === "1" && extraToolsProvider !== null,
-    computerAvailable: extraToolsProvider !== null,
+    computerControl: getSetting("ai_computer", "0") === "1" && !IS_BROWSER && extraToolsProvider !== null,
+    computerAvailable: !IS_BROWSER && extraToolsProvider !== null,
     webSearch: getSetting("ai_web", "1") === "1",
     confirmCommands: getSetting("ai_confirm_cmd", "1") === "1",
     confirmGui: getSetting("ai_confirm_gui", "0") === "1",
@@ -92,7 +100,7 @@ function getClient(): Anthropic {
   if (!apiKey) {
     throw new Error("لم يُضبط مفتاح Claude API بعد. أضفه من الإعدادات ← المساعد الذكي.");
   }
-  return new Anthropic({ apiKey, maxRetries: 2, timeout: 10 * 60 * 1000, dangerouslyAllowBrowser: IS_BROWSER });
+  return new Anthropic({ apiKey, maxRetries: 2, timeout: 5 * 60 * 1000, dangerouslyAllowBrowser: IS_BROWSER });
 }
 
 /** معاملات التفكير والجهد حسب النموذج (Haiku 4.5 لا يدعم التفكير التكيفي ولا effort). */
@@ -118,36 +126,72 @@ function friendlyError(error: unknown): string {
   return String(error);
 }
 
+/* ----------------------------- الذاكرة ----------------------------- */
+
+export function listMemory(): AiMemoryFact[] {
+  return getDb().prepare("SELECT * FROM ai_memory ORDER BY id DESC LIMIT 200").all() as AiMemoryFact[];
+}
+
+export function addMemory(fact: string, source = "user"): AiMemoryFact[] {
+  const clean = fact.trim().slice(0, 400);
+  if (clean) {
+    const dup = getDb().prepare("SELECT id FROM ai_memory WHERE fact = ?").get(clean);
+    if (!dup) getDb().prepare("INSERT INTO ai_memory(fact, source) VALUES(?, ?)").run(clean, source);
+  }
+  return listMemory();
+}
+
+export function deleteMemory(id: number): AiMemoryFact[] {
+  getDb().prepare("DELETE FROM ai_memory WHERE id = ?").run(id);
+  return listMemory();
+}
+
 /* ----------------------------- السياق ----------------------------- */
 
-function orgContext(): string {
+function orgContext(context?: AiChatContext): string {
   const s = getAiSettings();
   const d = new Date();
   const who = [s.adminName && `اسم المستخدم: ${s.adminName}`, s.adminTitle && `المسمى الوظيفي: ${s.adminTitle}`]
     .filter(Boolean)
     .join("، ");
-  return [
+  const memory = listMemory()
+    .slice(0, 60)
+    .map((m) => `- ${m.fact}`)
+    .join("\n");
+  const stats = taskStats();
+  const lines = [
     `الجهة: ${getSetting("org_name", "جامعة محمد بن زايد للعلوم الإنسانية")}.`,
     who,
-    `تاريخ اليوم: ${todayISO()} (${WEEKDAY_NAMES[d.getDay()]}).`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+    `تاريخ اليوم: ${todayISO()} (${WEEKDAY_NAMES[d.getDay()]})، الساعة ${d.toTimeString().slice(0, 5)}.`,
+    `لوحة المهام الآن: ${stats.todo} للتنفيذ، ${stats.doing} قيد العمل، ${stats.overdue} متأخرة، ${stats.dueToday} مستحقة اليوم.`,
+    memory ? `ما تتذكره عن المستخدم وعمله (استخدمه دون أن تعيده حرفيًا):\n${memory}` : "",
+  ];
+  if (context?.portalId) {
+    lines.push(
+      `المستخدم الآن داخل بوابة «${context.portalName ?? context.portalId}» (المعرّف ${context.portalId}) على الصفحة: ${context.title ?? ""} — ${context.url ?? ""}. ` +
+        "نفّذ طلبه على هذه الصفحة مباشرة بأدوات portal_* (اقرأ الصفحة أولًا بـportal_read_page) دون إعادة فتح البوابة إلا إذا احتجت الانتقال لصفحة أخرى. عند إنشاء مهمة من محتوى الصفحة مرّر رابط الصفحة في source_url ومعرّف البوابة في source_portal.",
+    );
+  }
+  if (context?.scope === "routine") lines.push("هذا تنفيذ آلي لروتين محفوظ: نفّذ التعليمات بالكامل بلا أسئلة، وأنهِ بملخص قصير لما فعلته وما يحتاج انتباه المستخدم.");
+  if (context?.scope === "brief") lines.push("أنت تُعدّ «موجز اليوم». اجمع المعلومات بالأدوات ثم اكتب الموجز مباشرة بالتنسيق المطلوب دون مقدمات.");
+  return lines.filter(Boolean).join("\n");
 }
 
-const CHAT_SYSTEM = `أنت «مساعد الإداري» داخل تطبيق سطح مكتب لموظف إداري في جامعة محمد بن زايد للعلوم الإنسانية (MBZUH) في أبوظبي.
+const CHAT_SYSTEM = `أنت «مساعد الإداري» داخل تطبيق «منصّة الإداري» لموظف إداري في جامعة محمد بن زايد للعلوم الإنسانية (MBZUH) في أبوظبي.
 
 دورك: مساعد تنفيذي وشريك تفكير. تكتب بالعربية الفصحى المبسّطة افتراضيًا (وبالإنجليزية إذا كتب المستخدم بها أو طلبها)، بأسلوب مباشر ومهني يليق بالمراسلات الجامعية الرسمية.
 
-لديك أدوات تقرأ بيانات التطبيق المحلية (إحصاءات الدورات والمدربين والقاعات، البحث في السجلات، التعارضات في الجداول، المهام، محاضر الاجتماعات) وتُنشئ مهامًا. استخدمها عندما يسأل المستخدم عن بياناته أو يطلب متابعة، ولا تخمّن أرقامًا لم تقرأها من الأدوات. عندما تُنشئ مهمة قل ذلك صراحة.
+لديك أدوات تقرأ بيانات التطبيق المحلية (إحصاءات الدورات والمدربين والقاعات، البحث في السجلات، التعارضات في الجداول، المهام، محاضر الاجتماعات) وتُنشئ مهامًا وتحدّثها، وتحفظ حقائق مفيدة عن المستخدم في الذاكرة (remember_fact) مثل اسم مديره، مسؤولياته، تفضيلاته، أسماء الجهات التي يتعامل معها — احفظ ما يُفيد في المرات القادمة دون إزعاج، واحذف ما يطلب حذفه. استخدم الأدوات عندما يسأل المستخدم عن بياناته أو يطلب متابعة، ولا تخمّن أرقامًا لم تقرأها من الأدوات. عندما تُنشئ مهمة قل ذلك صراحة.
 
-البوابات الجامعية المدمجة في التطبيق (على سطح المكتب تستطيع فتحها وقراءتها والتحكم فيها بأدوات portal_*): «ums» نظام الجامعة الموحّد (الطلبة والتسجيل)، «cec» لوحة الدورات Hub (مركز التعليم المستمر)، «outlook» البريد (تصل فيه المهام والمراسلات)، «teams» الاجتماعات ومواعيدها، «sharepoint» بوابة الملفات والسياسات، «onehub» الخدمات الحكومية للموظف (الإجازات وغيرها)، «site» موقع الجامعة. عند سؤال عن البريد أو الاجتماعات أو الإجازات أو الملفات أو الدورات: افتح البوابة المناسبة بـportal_open ثم اقرأها بـportal_read_page (وخذ لقطة portal_screenshot إن كان النص غير كافٍ). لا تقل «لا أستطيع» قبل أن تجرّب الأدوات فعلًا. إن أظهرت القراءة صفحة تسجيل دخول (Sign in / Microsoft) اطلب من المستخدم إتمام الدخول من صفحة «البوابات» ثم أعد القراءة. لا تدخل كلمات مرور بنفسك.
+البوابات الجامعية المدمجة في التطبيق (تستطيع فتحها وقراءتها والتحكم فيها بأدوات portal_*): «ums» نظام الجامعة الموحّد (الطلبة والتسجيل)، «cec» لوحة الدورات Hub (مركز التعليم المستمر)، «outlook» البريد (تصل فيه المهام والمراسلات)، «teams» الاجتماعات ومواعيدها، «sharepoint» بوابة الملفات والسياسات، «onehub» الخدمات الحكومية للموظف (الإجازات وغيرها)، «site» موقع الجامعة. عند سؤال عن البريد أو الاجتماعات أو الإجازات أو الملفات أو الدورات: افتح البوابة المناسبة بـportal_open ثم اقرأها بـportal_read_page (وخذ لقطة portal_screenshot إن كان النص غير كافٍ). لا تقل «لا أستطيع» قبل أن تجرّب الأدوات فعلًا. إن أظهرت القراءة صفحة تسجيل دخول (Sign in / Microsoft) اطلب من المستخدم إتمام الدخول من صفحة «البوابات» ثم أعد القراءة. لا تدخل كلمات مرور بنفسك.
 إرشادات عملية:
-- Outlook: بعد الفتح انتظر حتى تظهر قائمة الرسائل (portal_read_page يعيد «items» لكل رسالة: المرسل والموضوع والمعاينة). لقراءة رسالة كاملة انقر عليها بـportal_click بجزء من موضوعها ثم اقرأ الصفحة مجددًا بمنطقة selector="[role=main]". للرسائل غير المقروءة انتقل إلى https://outlook.office.com/mail/inbox ثم استخدم الفلاتر إن لزم. مرّر بـportal_scroll لتحميل المزيد.
+- Outlook: بعد الفتح انتظر حتى تظهر قائمة الرسائل (portal_read_page يعيد «items» لكل رسالة: المرسل والموضوع والمعاينة). لقراءة رسالة كاملة انقر عليها بـportal_click بجزء من موضوعها ثم اقرأ الصفحة مجددًا بمنطقة selector="[role=main]". للرسائل غير المقروءة انتقل إلى https://outlook.office.com/mail/inbox ثم استخدم الفلاتر إن لزم. مرّر بـportal_scroll لتحميل المزيد. للرد على رسالة: انقر «Reply/رد»، ثم عبّئ نص الرسالة بـportal_fill على حقل [role=textbox]، واعرض المسودة على المستخدم؛ لا تنقر «Send/إرسال» إلا إذا طلب المستخدم الإرسال صراحة.
 - الاجتماعات: تقويم Outlook يعرض اجتماعات Teams أيضًا: انتقل إلى https://outlook.office.com/calendar/view/day (أو /week) واقرأ الصفحة؛ أو افتح teams ثم https://teams.microsoft.com/v2/#/calendar.
 - SharePoint: استخدم مربع البحث في الصفحة (portal_fill على حقل البحث ثم press_enter) أو انتقل إلى رابط البحث ثم اقرأ النتائج، وافتح الملف/الصفحة المناسبة واقرأها.
 - Hub/UMS: اقرأ الجداول من «tables» في نتيجة القراءة، وانتقل بين الصفحات بالنقر على «التالي» أو تعديل معاملات الرابط (page=…).
-- بعد كل نقر أو انتقال أعد القراءة لأن الصفحة تغيّرت. إذا لم يظهر المحتوى بعد المحاولة الثانية خذ لقطة لتعرف السبب.
+- بعد كل نقر أو انتقال أعد القراءة لأن الصفحة تغيّرت. إذا لم يظهر المحتوى بعد المحاولة الثانية خذ لقطة لتعرف السبب. إذا أعادت أداة خطأ شهادة/اتصال أخبر المستخدم أن يفتح البوابة من صفحة «البوابات» ويعالج التنبيه هناك.
+- عندما تستخرج مهامًا من رسائل بريد أو صفحات، أنشئها بـcreate_task مع source_url (رابط الرسالة/الصفحة) وsource_portal (معرّف البوابة) ليتمكن المستخدم من فتح المصدر بنقرة.
+- إجراءات لا رجعة فيها (إرسال بريد، حذف، اعتماد طلب، تقديم نموذج): اعرض ما ستفعله أولًا ولا تنفّذه إلا بطلب صريح من المستخدم.
 
 ابدأ بالجواب أو المسودة مباشرة، دون مقدمات أو مجاملات. للمسودات الرسمية استخدم عناوين واضحة وترتيبًا منطقيًا. لا تفبرك سياسات أو أسماء أو أرقامًا؛ إذا كان أمرٌ يحتاج تأكيدًا من نظام الجامعة الرسمي (UMS) أو من جهة مختصة فاذكر ذلك بوضوح في سطر واحد.`;
 
@@ -155,7 +199,7 @@ const COMPUTER_SYSTEM = `
 
 وضع «التحكم بالكمبيوتر» مفعّل: لديك أدوات لفتح البرامج والملفات والروابط، ورؤية الشاشة (لقطة شاشة)، والنقر بالفأرة والكتابة بلوحة المفاتيح، والتبديل بين النوافذ، وتنفيذ أوامر PowerShell، وقراءة الحافظة والملفات. اتبع هذا الأسلوب:
 - قبل أي نقر أو كتابة خذ لقطة شاشة لتعرف ما على الشاشة، ونفّذ خطوة واحدة ثم تحقق بلقطة جديدة عند الحاجة. الإحداثيات التي تُعطيها للنقر هي إحداثيات اللقطة نفسها.
-- فضّل الطرق المباشرة والآمنة: افتح البرنامج باسمه، أو الملف بمساره، أو الرابط، بدل النقر على الأيقونات إن أمكن.
+- فضّل الطرق المباشرة والآمنة: افتح البرنامج باسمه، أو الملف بمساره، أو الرابط، بدل النقر على الأيقونات إن أمكن. للبوابات الجامعية استخدم أدوات portal_* لا المتصفح الخارجي.
 - لا تنفّذ إجراءً لا رجعة فيه (حذف، إرسال، دفع، تغيير إعدادات نظام) دون أن تذكره صراحة وتحصل على موافقة المستخدم. لا تكتب كلمات مرور ولا تتجاوز شاشات الأمان.
 - بعد الانتهاء لخّص ما فعلته في سطرين.`;
 
@@ -199,8 +243,7 @@ export function resolveApproval(requestId: string, ok: boolean): boolean {
   return true;
 }
 
-function requestApproval(jobId: string, label: string, detail: string, signal: AbortSignal): Promise<boolean> {
-  if (!approvalEmit) return Promise.resolve(false);
+function requestApproval(jobId: string, label: string, detail: string, signal: AbortSignal, emit: Emit): Promise<boolean> {
   const requestId = `${jobId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   return new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => {
@@ -218,11 +261,14 @@ function requestApproval(jobId: string, label: string, detail: string, signal: A
       signal.removeEventListener("abort", onAbort);
       resolve(ok);
     });
-    approvalEmit!({ jobId, type: "approval", requestId, label, detail });
+    const ev: AiStreamEvent = { jobId, type: "approval", requestId, label, detail };
+    emit(ev);
+    if (approvalEmit && approvalEmit !== emit) approvalEmit(ev);
   });
 }
 
 const PRIORITIES: TaskPriority[] = ["low", "normal", "high", "urgent"];
+const STATUSES: TaskStatus[] = ["todo", "doing", "done"];
 
 const TOOLS: ToolDef[] = [
   {
@@ -270,7 +316,7 @@ const TOOLS: ToolDef[] = [
     label: "قراءة المهام",
     tool: {
       name: "list_tasks",
-      description: "يعيد مهام الإداري في لوحة المهام مع حالتها وأولويتها وتاريخ استحقاقها، وملخص الأعداد (متأخرة، مستحقة اليوم).",
+      description: "يعيد مهام الإداري في لوحة المهام (المعرّف، العنوان، الحالة، الأولوية، الاستحقاق، المصدر) وملخص الأعداد (متأخرة، مستحقة اليوم).",
       input_schema: {
         type: "object",
         properties: {
@@ -289,7 +335,7 @@ const TOOLS: ToolDef[] = [
     label: "إنشاء مهمة",
     tool: {
       name: "create_task",
-      description: "ينشئ مهمة جديدة في لوحة مهام الإداري. استخدمه عندما يطلب المستخدم تذكيرًا أو متابعة أو إضافة مهمة.",
+      description: "ينشئ مهمة جديدة في لوحة مهام الإداري. استخدمه عندما يطلب المستخدم تذكيرًا أو متابعة أو إضافة مهمة، أو عند استخراج مهام من بريد/صفحة (مع رابط المصدر).",
       input_schema: {
         type: "object",
         properties: {
@@ -298,6 +344,8 @@ const TOOLS: ToolDef[] = [
           priority: { type: "string", enum: PRIORITIES },
           due_date: { type: "string", description: "تاريخ الاستحقاق بصيغة YYYY-MM-DD أو فارغ" },
           tags: { type: "string", description: "وسوم مفصولة بفاصلة عربية «،»" },
+          source_url: { type: "string", description: "رابط الرسالة/الصفحة التي جاءت منها المهمة (إن وُجد)" },
+          source_portal: { type: "string", description: "معرّف البوابة المصدر مثل outlook أو cec (إن وُجد)" },
         },
         required: ["title"],
         additionalProperties: false,
@@ -315,8 +363,66 @@ const TOOLS: ToolDef[] = [
         due_date: due,
         tags: typeof input.tags === "string" ? input.tags : null,
         source: "ai",
+        source_url: typeof input.source_url === "string" && /^https?:\/\//.test(input.source_url) ? input.source_url : null,
+        source_portal: typeof input.source_portal === "string" ? input.source_portal : null,
       });
       return { ok: true, task };
+    },
+  },
+  {
+    label: "تحديث مهمة",
+    tool: {
+      name: "update_task",
+      description: "يحدّث مهمة موجودة بمعرّفها: الحالة (todo/doing/done)، الأولوية، الاستحقاق، العنوان أو التفاصيل. استخدمه عندما يقول المستخدم إنه أنجز مهمة أو يريد تأجيلها.",
+      input_schema: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          status: { type: "string", enum: STATUSES },
+          priority: { type: "string", enum: PRIORITIES },
+          due_date: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+        },
+        required: ["id"],
+        additionalProperties: false,
+      },
+    },
+    run: (input) => {
+      const id = Number(input.id);
+      if (!getTask(id)) throw new Error("لا توجد مهمة بهذا المعرّف");
+      const patch: Record<string, unknown> = {};
+      if (STATUSES.includes(input.status as TaskStatus)) patch.status = input.status;
+      if (PRIORITIES.includes(input.priority as TaskPriority)) patch.priority = input.priority;
+      if (typeof input.due_date === "string") patch.due_date = /^\d{4}-\d{2}-\d{2}$/.test(input.due_date) ? input.due_date : null;
+      if (typeof input.title === "string" && input.title.trim()) patch.title = input.title;
+      if (typeof input.description === "string") patch.description = input.description;
+      return { ok: true, task: updateTask(id, patch) };
+    },
+  },
+  {
+    label: "حفظ في الذاكرة",
+    tool: {
+      name: "remember_fact",
+      description: "يحفظ حقيقة قصيرة ومفيدة عن المستخدم أو عمله لتُستخدم في المحادثات القادمة (مثل: مديره المباشر، الجهات التي يتابعها، تفضيلات الصياغة). لا تحفظ كلمات مرور أو بيانات حسّاسة.",
+      input_schema: { type: "object", properties: { fact: { type: "string" } }, required: ["fact"], additionalProperties: false },
+    },
+    run: (input) => ({ ok: true, memory: addMemory(String(input.fact ?? ""), "ai").length }),
+  },
+  {
+    label: "حذف من الذاكرة",
+    tool: {
+      name: "forget_fact",
+      description: "يحذف حقيقة من الذاكرة بمعرّفها أو بنصها (جزء منه).",
+      input_schema: { type: "object", properties: { id: { type: "integer" }, text: { type: "string" } }, additionalProperties: false },
+    },
+    run: (input) => {
+      if (input.id) deleteMemory(Number(input.id));
+      else if (typeof input.text === "string" && input.text.trim()) {
+        const q = input.text.trim().toLowerCase();
+        for (const m of listMemory()) if (m.fact.toLowerCase().includes(q)) deleteMemory(m.id);
+      }
+      return { ok: true, remaining: listMemory().map((m) => ({ id: m.id, fact: m.fact })) };
     },
   },
   {
@@ -412,8 +518,37 @@ export function loadHistory(chatId: string): Anthropic.MessageParam[] {
   return parsed;
 }
 
+type Block = { type?: string; content?: unknown };
+
+/**
+ * يستبدل الصور القديمة في نتائج الأدوات بنص قصير: تبقى آخر `keep` صور فقط.
+ * هذا يمنع تضخّم كل طلب (ميغابايتات لكل جولة) وبطء الحفظ — السبب الأول لتعليق المحادثات الطويلة.
+ */
+function pruneImages(history: Anthropic.MessageParam[], keep = 2): void {
+  let seen = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg.role !== "user" || !Array.isArray(msg.content)) continue;
+    for (const block of msg.content as Block[]) {
+      if (block.type !== "tool_result" || !Array.isArray(block.content)) continue;
+      const inner = block.content as Block[];
+      for (let k = 0; k < inner.length; k++) {
+        if (inner[k].type !== "image") continue;
+        seen++;
+        if (seen > keep) inner[k] = { type: "text", text: "[لقطة سابقة حُذفت لتوفير المساحة — خذ لقطة جديدة إن احتجت]" } as Block;
+      }
+    }
+  }
+}
+
+function stripImages(history: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  const copy = JSON.parse(JSON.stringify(history)) as Anthropic.MessageParam[];
+  pruneImages(copy, 0);
+  return copy;
+}
+
 function persistHistory(chatId: string, title: string, transcriptPatch?: unknown[]): void {
-  const messages = histories.get(chatId) ?? [];
+  const messages = stripImages(histories.get(chatId) ?? []);
   const db = getDb();
   const existing = db.prepare("SELECT id FROM ai_chats WHERE id = ?").get(chatId) as { id: string } | undefined;
   if (existing) {
@@ -437,7 +572,7 @@ export function saveTranscript(chatId: string, title: string, transcript: unknow
 
 export function listChats() {
   return getDb()
-    .prepare("SELECT id, title, created_at, updated_at FROM ai_chats ORDER BY updated_at DESC LIMIT 50")
+    .prepare("SELECT id, title, created_at, updated_at FROM ai_chats WHERE id NOT LIKE 'routine-%' AND id NOT LIKE 'brief-%' ORDER BY updated_at DESC LIMIT 50")
     .all() as { id: string; title: string; created_at: string; updated_at: string }[];
 }
 
@@ -451,10 +586,21 @@ export function deleteChat(chatId: string): void {
   getDb().prepare("DELETE FROM ai_chats WHERE id = ?").run(chatId);
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    p.finally(() => clearTimeout(timer)),
+    new Promise<T>((_r, reject) => {
+      timer = setTimeout(() => reject(new Error(`${what}: انتهت المهلة (${Math.round(ms / 1000)} ث) دون استجابة.`)), ms);
+    }),
+  ]);
+}
+
 /**
  * يرسل رسالة في محادثة ويبثّ الرد تدريجيًا. حلقة يدوية: نص → أدوات → نص… حتى ينتهي الدور.
+ * يعيد النص الكامل للرد (أو null عند الخطأ).
  */
-export async function chat(chatId: string, jobId: string, userText: string, emit: Emit): Promise<void> {
+export async function chat(chatId: string, jobId: string, userText: string, emit: Emit, context?: AiChatContext): Promise<string | null> {
   const settings = getAiSettings();
   const controller = new AbortController();
   jobs.set(jobId, controller);
@@ -469,7 +615,7 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
     history.pop();
     emit({ jobId, type: "error", message: friendlyError(error) });
     jobs.delete(jobId);
-    return;
+    return null;
   }
 
   const localTools: ToolDef[] = [...TOOLS, ...(extraToolsProvider ? extraToolsProvider(settings) : [])];
@@ -477,15 +623,17 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
 
   let fullText = "";
   let usage = { input: 0, output: 0 };
+  let ok = false;
   try {
     for (let round = 0; round < (extraToolsProvider ? 40 : 12); round++) {
+      pruneImages(history);
       const stream = client.messages.stream(
         {
           model: settings.model,
           max_tokens: 16000,
           system: [
             { type: "text", text: CHAT_SYSTEM + (settings.computerControl ? COMPUTER_SYSTEM : ""), cache_control: { type: "ephemeral" } },
-            { type: "text", text: orgContext() },
+            { type: "text", text: orgContext(context) },
           ],
           tools: [...localTools.map((t) => t.tool), ...serverTools(settings)],
           messages: history,
@@ -524,6 +672,7 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
       const toolUses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
       if (toolUses.length === 0 || message.stop_reason !== "tool_use") {
         if (message.stop_reason === "max_tokens") fullText += "\n\n…(اقتُطع الرد لبلوغ الحد الأقصى للطول)";
+        ok = true;
         break;
       }
 
@@ -534,17 +683,18 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
         emit({ jobId, type: "tool", name: use.name, label, phase: "start" });
         try {
           if (!def) throw new Error(`أداة غير معروفة: ${use.name}`);
+          if (controller.signal.aborted) throw new Error("أُلغي الطلب.");
           const input = (use.input && typeof use.input === "object" ? use.input : {}) as Record<string, unknown>;
           const ask = def.approval?.(input, settings);
           if (ask) {
-            const ok = await requestApproval(jobId, label, ask, controller.signal);
-            if (!ok) {
+            const approved = await requestApproval(jobId, label, ask, controller.signal, emit);
+            if (!approved) {
               results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: "رفض المستخدم تنفيذ هذا الإجراء. لا تكرره؛ اسأله عن البديل." });
               emit({ jobId, type: "tool", name: use.name, label, phase: "end", ok: false });
               continue;
             }
           }
-          const out = await def.run(input);
+          const out = await withTimeout(Promise.resolve(def.run(input)), 120_000, label);
           const blocks = (out as { __blocks?: Anthropic.ToolResultBlockParam["content"] })?.__blocks;
           results.push({
             type: "tool_result",
@@ -571,15 +721,143 @@ export async function chat(chatId: string, jobId: string, userText: string, emit
       }
     }
     emit({ jobId, type: "done", text: fullText, usage });
-    logActivity("ai", null, "محادثة مع المساعد", userText.slice(0, 80));
+    logActivity("ai", null, context?.scope === "routine" ? "تنفيذ روتين" : context?.portalId ? `أمر داخل بوابة ${context.portalId}` : "محادثة مع المساعد", userText.slice(0, 80));
   } catch (error) {
     // نُبقي السجل متسقًا: نحذف رسالة المستخدم اليتيمة إن لم يكتمل أي رد.
     if (history[history.length - 1]?.role === "user") history.pop();
     emit({ jobId, type: "error", message: friendlyError(error) });
+    return null;
   } finally {
     jobs.delete(jobId);
-    persistHistory(chatId, isFirst ? userText : "");
+    try {
+      persistHistory(chatId, isFirst ? userText : "");
+    } catch {
+      /* الحفظ ثانوي */
+    }
   }
+  return ok ? fullText : null;
+}
+
+/* ------------------------------ الروتينات ------------------------------ */
+
+export function listRoutines(): AiRoutine[] {
+  return getDb().prepare("SELECT * FROM ai_routines ORDER BY id").all() as AiRoutine[];
+}
+
+export function saveRoutine(input: Partial<AiRoutine> & { name: string; prompt: string }): AiRoutine[] {
+  const db = getDb();
+  const time = typeof input.schedule_time === "string" && /^\d{2}:\d{2}$/.test(input.schedule_time) ? input.schedule_time : null;
+  const weekdays = typeof input.weekdays === "string" && input.weekdays.trim() ? input.weekdays : "0,1,2,3,4";
+  if (input.id) {
+    db.prepare("UPDATE ai_routines SET name=?, prompt=?, schedule_time=?, weekdays=?, enabled=? WHERE id=?").run(
+      input.name.trim(),
+      input.prompt.trim(),
+      time,
+      weekdays,
+      input.enabled === undefined ? 1 : input.enabled ? 1 : 0,
+      input.id,
+    );
+  } else {
+    db.prepare("INSERT INTO ai_routines(name, prompt, schedule_time, weekdays, enabled) VALUES(?,?,?,?,?)").run(
+      input.name.trim(),
+      input.prompt.trim(),
+      time,
+      weekdays,
+      input.enabled === undefined ? 1 : input.enabled ? 1 : 0,
+    );
+  }
+  return listRoutines();
+}
+
+export function deleteRoutine(id: number): AiRoutine[] {
+  getDb().prepare("DELETE FROM ai_routines WHERE id = ?").run(id);
+  return listRoutines();
+}
+
+const runningRoutines = new Set<number>();
+
+/** ينفّذ روتينًا الآن (يدويًا أو من المجدول) ويحفظ ملخص النتيجة. */
+export async function runRoutine(id: number, jobId: string, emit: Emit): Promise<{ ok: boolean; text: string }> {
+  const r = getDb().prepare("SELECT * FROM ai_routines WHERE id = ?").get(id) as AiRoutine | undefined;
+  if (!r) {
+    emit({ jobId, type: "error", message: "الروتين غير موجود." });
+    return { ok: false, text: "" };
+  }
+  if (runningRoutines.has(id)) {
+    emit({ jobId, type: "error", message: "هذا الروتين قيد التنفيذ الآن." });
+    return { ok: false, text: "" };
+  }
+  runningRoutines.add(id);
+  try {
+    const chatId = `routine-${id}-${Date.now().toString(36)}`;
+    const text = await chat(chatId, jobId, r.prompt, emit, { scope: "routine" });
+    getDb()
+      .prepare("UPDATE ai_routines SET last_run_at = datetime('now'), last_ok = ?, last_result = ? WHERE id = ?")
+      .run(text === null ? 0 : 1, (text ?? "").slice(0, 8000), id);
+    return { ok: text !== null, text: text ?? "" };
+  } finally {
+    runningRoutines.delete(id);
+  }
+}
+
+let schedulerTimer: ReturnType<typeof setInterval> | null = null;
+
+/** يفحص كل دقيقة الروتينات المجدولة ويشغّل ما حان وقته (مرة واحدة يوميًا لكل روتين). */
+export function startRoutineScheduler(emit: Emit, onDone: (r: { id: number; name: string; ok: boolean; summary?: string }) => void): void {
+  if (schedulerTimer) return;
+  const tick = () => {
+    let list: AiRoutine[];
+    try {
+      list = listRoutines();
+    } catch {
+      return;
+    }
+    const now = new Date();
+    const hhmm = now.toTimeString().slice(0, 5);
+    const today = todayISO();
+    for (const r of list) {
+      if (!r.enabled || !r.schedule_time || r.schedule_time !== hhmm) continue;
+      if (!r.weekdays.split(",").map((x) => Number(x.trim())).includes(now.getDay())) continue;
+      if (r.last_run_at && r.last_run_at.slice(0, 10) === today) continue;
+      if (runningRoutines.has(r.id)) continue;
+      const jobId = `routine-${r.id}-${Date.now().toString(36)}`;
+      void runRoutine(r.id, jobId, emit).then((res) => onDone({ id: r.id, name: r.name, ok: res.ok, summary: res.text.slice(0, 200) }));
+    }
+  };
+  schedulerTimer = setInterval(tick, 60_000);
+}
+
+/* ------------------------------ الموجز اليومي ------------------------------ */
+
+export function getBrief(day = todayISO()): AiBrief | null {
+  return (getDb().prepare("SELECT * FROM ai_briefs WHERE day = ?").get(day) as AiBrief | undefined) ?? null;
+}
+
+const BRIEF_PROMPT = `أعدّ «موجز اليوم» للإداري. اجمع أولًا:
+1) المهام من list_tasks (المتأخرة والمستحقة اليوم والعاجلة).
+2) إن كانت أدوات البوابات متاحة: افتح outlook واقرأ آخر الرسائل غير المقروءة (أول 10) وحدّد ما فيها من طلبات أو مواعيد نهائية؛ ثم افتح تقويم اليوم https://outlook.office.com/calendar/view/day واقرأ اجتماعات اليوم. إن ظهرت صفحة تسجيل دخول أو خطأ فاذكر ذلك في سطر واحد وتابع بما توفر.
+ثم اكتب الموجز بهذا التنسيق فقط، بلا مقدمة:
+## أهم 3 أولويات اليوم
+- …
+## اجتماعات اليوم
+- الوقت — العنوان (أو «لا توجد اجتماعات» / «لم أتمكن من قراءة التقويم»)
+## بريد يحتاج ردًا أو إجراءً
+- المرسل — الموضوع — المطلوب
+## المهام المتأخرة والمستحقة اليوم
+- …
+## اقتراح
+سطر أو سطران بما يُنصح البدء به.`;
+
+/** يولّد موجز اليوم ويحفظه (chatId ثابت لليوم). */
+export async function runBrief(jobId: string, emit: Emit): Promise<AiBrief | null> {
+  const day = todayISO();
+  const chatId = `brief-${day}-${Date.now().toString(36)}`;
+  const text = await chat(chatId, jobId, BRIEF_PROMPT, emit, { scope: "brief" });
+  if (text === null || !text.trim()) return null;
+  getDb()
+    .prepare("INSERT INTO ai_briefs(day, text, created_at) VALUES(?,?,datetime('now')) ON CONFLICT(day) DO UPDATE SET text = excluded.text, created_at = excluded.created_at")
+    .run(day, text.trim());
+  return getBrief(day);
 }
 
 /* ------------------------------ القوالب ------------------------------ */

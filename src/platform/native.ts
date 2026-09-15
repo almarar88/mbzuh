@@ -5,19 +5,36 @@
 
 export interface AndroidBridge {
   openExternal(url: string): void;
-  openPortal(url: string, title: string, css: string, darkCss: string, dark: boolean, internalHosts: string): void;
+  /** extraJson: { id, home, autofill } */
+  openPortal(url: string, title: string, css: string, darkCss: string, dark: boolean, extraJson: string): void;
   clearPortalSession(): void;
   saveFile(name: string, mime: string, base64: string): void;
   openFile(name: string, mime: string, base64: string): void;
   printHtml(html: string, jobName: string): void;
   toast(message: string): void;
   getInfo(): string;
+  /* ── البوابة المفتوحة (للمساعد الذكي) ── */
+  /** JSON: { open, id, url, title } */
+  portalInfo?(): string;
+  /** ينفّذ JS في البوابة ويعيد الناتج عبر window.__mbzuhPortalResult(reqId, value). */
+  portalEval?(reqId: string, js: string): void;
+  portalNavigate?(url: string): void;
+  portalAction?(action: string): void;
+  /** لقطة JPEG للبوابة عبر window.__mbzuhPortalResult(reqId, { jpeg, width, height }). */
+  portalCapture?(reqId: string): void;
+  /** يمرّر حدث بث من المساعد إلى واجهة البوابة الأصلية. */
+  portalAssistantEvent?(json: string): void;
+  closePortal?(): void;
 }
 
 declare global {
   interface Window {
     AndroidBridge?: AndroidBridge;
     __mbzuhPosture?: (json: { posture: "flat" | "tabletop" | "book"; top?: number; bottom?: number; left?: number; right?: number }) => void;
+    __mbzuhPortalResult?: (reqId: string, value: unknown) => void;
+    __mbzuhPortalCommand?: (portalId: string, text: string) => void;
+    __mbzuhPortalApprove?: (requestId: string, ok: boolean) => void;
+    __mbzuhPortalCancel?: () => void;
   }
 }
 

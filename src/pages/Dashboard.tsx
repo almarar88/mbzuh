@@ -1,12 +1,92 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { Badge, Button, EmptyState, Panel } from "../components/ui";
+import { Badge, Button, EmptyState, Panel, useUi } from "../components/ui";
 import { Icon, type IconName } from "../components/icons";
 import { BarList, SegmentedBar } from "../components/Charts";
+import { uid } from "../lib/useAiChat";
 import { formatDate, formatDateTime, todayISO } from "@shared/text";
 import { PORTAL_COLORS, type PortalsState } from "@shared/portals";
-import type { Conflict, DashboardStats, Task, TaskStats } from "@shared/types";
+import type { AiBrief, AiRoutine, AiStreamEvent, Conflict, DashboardStats, Task, TaskStats } from "@shared/types";
 import type { PageId } from "../App";
+
+/** «موجز اليوم»: يجمعه المساعد من البريد والتقويم والمهام ويُحفظ لليوم. */
+function BriefCard({ hasKey, onNavigate }: { hasKey: boolean; onNavigate: (page: PageId, id?: number, q?: string) => void }) {
+  const { toast } = useUi();
+  const [brief, setBrief] = useState<AiBrief | null>(null);
+  const [live, setLive] = useState("");
+  const [running, setRunning] = useState(false);
+  const [open, setOpen] = useState(false);
+  const jobRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void api.ai.brief().then(setBrief);
+    const off = window.dynamo.on("app:ai", (raw) => {
+      const ev = raw as AiStreamEvent;
+      if (ev.jobId !== jobRef.current) return;
+      if (ev.type === "text") setLive((t) => t + ev.text);
+      if (ev.type === "done" || ev.type === "error" || ev.type === "refusal") {
+        jobRef.current = null;
+        setRunning(false);
+        if (ev.type !== "done") toast(ev.message, "danger");
+        void api.ai.brief().then(setBrief);
+      }
+    });
+    return off;
+  }, [toast]);
+
+  const run = async () => {
+    if (jobRef.current) return;
+    const jobId = uid();
+    jobRef.current = jobId;
+    setRunning(true);
+    setLive("");
+    setOpen(true);
+    await api.ai.briefRun(jobId);
+  };
+
+  const text = running ? live : brief?.text ?? "";
+  return (
+    <Panel className="mb-5">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h3 className="font-extrabold text-[15px] flex items-center gap-2">
+            <Icon name="sparkles" size={15} style={{ color: "var(--accent)" }} /> موجز اليوم
+            {brief && !running && <Badge tone="ok">{formatDateTime(brief.created_at)}</Badge>}
+            {running && <span className="live-dot" style={{ background: "var(--accent)" }} />}
+          </h3>
+          <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
+            يجمعه المساعد من بريدك واجتماعاتك ومهامك: أهم الأولويات، ما يحتاج ردًا، والمتأخر.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {text && (
+            <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
+              {open ? "طيّ" : "عرض"}
+            </Button>
+          )}
+          <Button size="sm" variant="primary" disabled={running || !hasKey} onClick={() => void run()} title={hasKey ? "" : "أضف مفتاح Claude API من الإعدادات"}>
+            <Icon name={brief ? "refresh" : "wand"} size={13} /> {running ? "يجمع…" : brief ? "تحديث" : "جهّز موجز اليوم"}
+          </Button>
+        </div>
+      </div>
+      {open && text && (
+        <div className="output-pane text-sm mt-3 p-3" style={{ background: "var(--panel-2)", borderRadius: 16, maxHeight: 360, overflow: "auto" }}>
+          <span className={running ? "cursor-blink" : ""}>{text}</span>
+          {!running && (
+            <div className="mt-3 flex gap-2 flex-wrap">
+              <Button size="sm" onClick={() => onNavigate("assistant", undefined, "بناءً على موجز اليوم، رتّب لي خطة عمل لليوم بالساعات وابدأ بتنفيذ ما يمكن تنفيذه.")}>
+                <Icon name="sparkles" size={13} /> حوّله إلى خطة يوم
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => onNavigate("tasks")}>
+                <Icon name="tasks" size={13} /> المهام
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -53,10 +133,12 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   const [adminName, setAdminName] = useState("");
   const [portals, setPortals] = useState<PortalsState | null>(null);
   const [showCourses, setShowCourses] = useState(false);
+  const [hasKey, setHasKey] = useState(false);
+  const [routines, setRoutines] = useState<AiRoutine[]>([]);
 
   useEffect(() => {
     void (async () => {
-      const [s, c, a, t, ai, p, settings] = await Promise.all([
+      const [s, c, a, t, ai, p, settings, r] = await Promise.all([
         api.dashboard.stats(),
         api.conflicts.all(),
         api.dashboard.activity(),
@@ -64,6 +146,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
         api.ai.settings(),
         api.portal.state(),
         api.settings.all(),
+        api.ai.routines(),
       ]);
       setStats(s);
       setConflicts(c);
@@ -71,7 +154,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
       setTasks(t.tasks);
       setTaskStats(t.stats);
       setAdminName(ai.adminName);
+      setHasKey(ai.hasKey);
       setPortals(p);
+      setRoutines(r);
       setShowCourses(settings.courses_open === "1" || s.courses > 0);
     })();
   }, []);
@@ -176,6 +261,8 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
         </div>
       </div>
 
+      <BriefCard hasKey={hasKey} onNavigate={onNavigate} />
+
       {/* مؤشرات */}
       <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
         <Tile label="مهام مفتوحة" value={taskStats ? taskStats.todo + taskStats.doing : 0} tone="blue" icon="tasks" onClick={() => onNavigate("tasks")} />
@@ -236,6 +323,11 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
                     <span className="truncate flex-1" style={{ color: "var(--ink-2)" }}>
                       {t.title}
                     </span>
+                    {t.source_url && (
+                      <button className="btn btn-ghost btn-sm btn-icon" style={{ width: 24, height: 24 }} title="فتح المصدر في البوابة" onClick={() => onNavigate("portals", undefined, `${t.source_portal ?? "outlook"}|${t.source_url}`)}>
+                        <Icon name="external" size={12} />
+                      </button>
+                    )}
                     {t.priority === "urgent" && <Badge tone="danger">عاجلة</Badge>}
                     {t.priority === "high" && <Badge tone="warn">عالية</Badge>}
                     {t.due_date && (
@@ -271,6 +363,20 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
               </button>
             ))}
           </div>
+          {routines.length > 0 && (
+            <>
+              <p className="text-xs mt-3 mb-1.5" style={{ color: "var(--muted)" }}>
+                روتيناتك
+              </p>
+              <div className="flex gap-1.5 flex-wrap">
+                {routines.slice(0, 4).map((r) => (
+                  <button key={r.id} className="chip" title={r.prompt} onClick={() => onNavigate("assistant", undefined, r.prompt)}>
+                    <Icon name="clock" size={12} /> {r.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </Panel>
 
         <Panel className="h-full">

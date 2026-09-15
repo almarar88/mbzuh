@@ -299,6 +299,16 @@ html[data-layout="compact"] .topbar { display: flex; }
 
 /* هواتف الطي: في وضع الطاولة يبقى المحتوى في النصف العلوي */
 html[data-posture="tabletop"] .main-scroll { max-height: var(--hinge-top); }
+/* وضع الكتاب (مفصلة عمودية): الشبكات ثنائية الأعمدة تترك المفصلة في الفجوة */
+html[data-posture="book"] .hero-grid, html[data-posture="book"] .two-col { grid-template-columns: 1fr 1fr; column-gap: 40px; }
+html[data-posture="book"] .kanban-grid { grid-template-columns: 1fr 1fr; column-gap: 40px; }
+
+/* ------------------------------ المساعد داخل البوابة ------------------------------ */
+
+.copilot { display: flex; flex-direction: column; background: var(--panel); min-height: 0; }
+.copilot-side { width: 380px; flex-shrink: 0; border-inline-start: 1px solid var(--border); }
+.copilot-bottom { height: 42%; min-height: 220px; border-top: 1px solid var(--border); }
+html[data-posture="tabletop"] .copilot-bottom { height: calc(100% - var(--hinge-top) + 40px); }
 
 /* ------------------------------ البطل والبطاقات ------------------------------ */
 

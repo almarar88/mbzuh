@@ -9,7 +9,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { DatabaseSync, backup as sqliteBackup } from "node:sqlite";
 import { app } from "electron";
-import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema";
+import { MIGRATIONS, SCHEMA_SQL, SCHEMA_VERSION } from "./schema";
 
 export interface RunResult {
   changes: number;
@@ -107,6 +107,16 @@ export function getDb(): Db {
       | undefined)?.value ?? 0,
   );
   if (current < SCHEMA_VERSION) {
+    for (const m of MIGRATIONS) {
+      if (m.version <= current) continue;
+      for (const sql of m.sql) {
+        try {
+          db.exec(sql);
+        } catch {
+          /* العمود موجود مسبقًا (قاعدة أُنشئت بمخطط أحدث) */
+        }
+      }
+    }
     db.prepare(
       "INSERT INTO settings(key, value) VALUES('schema_version', ?) " +
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",

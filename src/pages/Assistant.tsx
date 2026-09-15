@@ -1,15 +1,17 @@
 /**
- * المساعد الذكي: محادثة تعتمد أدوات تقرأ بيانات التطبيق، وأدوات مهام جاهزة
- * (خطابات، بريد، تلخيص، ترجمة، تدقيق، محاضر، خطة أسبوعية…) مع بث تدريجي.
+ * المساعد الذكي: محادثة تعتمد أدوات تقرأ بيانات التطبيق والبوابات، وأدوات مهام جاهزة
+ * (خطابات، بريد، تلخيص، ترجمة، تدقيق، محاضر، خطة أسبوعية…)، وروتينات محفوظة
+ * تُنفَّذ يدويًا أو في وقت محدد.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { Button, Field, Input, Select, TabBar, Textarea, useUi } from "../components/ui";
+import { Badge, Button, EmptyState, Field, Input, Modal, Select, TabBar, Textarea, Toggle, useUi } from "../components/ui";
 import { Icon } from "../components/icons";
-import type { AiChatMessage, AiSettings, AiStreamEvent, AiTemplateId } from "@shared/types";
+import { ChatThread } from "../components/ChatThread";
+import { uid, useAiChat } from "../lib/useAiChat";
+import { formatDateTime } from "@shared/text";
+import type { AiRoutine, AiSettings, AiStreamEvent, AiTemplateId } from "@shared/types";
 import type { PageId } from "../App";
-
-const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 const SUGGESTIONS = [
   "افتح بريد Outlook ولخّص أهم الرسائل غير المقروءة، وحوّل ما فيها من طلبات إلى مهام.",
@@ -33,6 +35,13 @@ const TOOL_CARDS: { id: AiTemplateId; label: string; desc: string; icon: string 
   { id: "announcement", label: "تعميم / إعلان", desc: "إعلان واضح للموظفين أو الطلبة", icon: "📣" },
 ];
 
+const ROUTINE_PRESETS: { name: string; prompt: string; time: string }[] = [
+  { name: "موجز الصباح", time: "08:00", prompt: "افتح Outlook واقرأ الرسائل غير المقروءة، ثم تقويم اليوم، ثم مهامي المفتوحة، واكتب موجزًا قصيرًا بأهم 3 أولويات واجتماعات اليوم وما يحتاج ردًا." },
+  { name: "بريد ← مهام", time: "13:00", prompt: "اقرأ الرسائل غير المقروءة في Outlook خلال آخر 24 ساعة، واستخرج كل طلب أو موعد نهائي كمهمة في لوحة المهام مع رابط الرسالة، دون تكرار مهام موجودة." },
+  { name: "اجتماعات الغد", time: "17:00", prompt: "افتح تقويم Outlook على يوم الغد واعرض الاجتماعات بأوقاتها، وأنشئ مهمة تحضير لكل اجتماع يحتاج إعدادًا." },
+  { name: "متابعة الدورات", time: "10:00", prompt: "افتح لوحة الدورات Hub واستخرج الدورات الحالية وحالتها وأعداد المسجلين، ونبّهني إلى أي دورة متأخرة أو تحتاج إجراءً كمهمة." },
+];
+
 function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
 }
@@ -40,7 +49,7 @@ function copyToClipboard(text: string): Promise<void> {
 type Navigate = (page: PageId, id?: number, q?: string) => void;
 
 export default function AssistantPage({ onNavigate, initialPrompt }: { onNavigate: Navigate; initialPrompt?: string }) {
-  const [tab, setTab] = useState<"chat" | "tools">("chat");
+  const [tab, setTab] = useState<"chat" | "tools" | "routines">("chat");
   const [settings, setSettings] = useState<AiSettings | null>(null);
 
   useEffect(() => {
@@ -58,7 +67,7 @@ export default function AssistantPage({ onNavigate, initialPrompt }: { onNavigat
             المساعد الذكي
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-            مساعد تنفيذي يقرأ بيانات التطبيق ويُنشئ المهام ويصوغ المراسلات — مدعوم بـClaude.
+            مساعد تنفيذي يقرأ بياناتك وبواباتك، يُنشئ المهام ويصوغ المراسلات، ويتذكّر ما يهمك — مدعوم بـClaude.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -71,7 +80,7 @@ export default function AssistantPage({ onNavigate, initialPrompt }: { onNavigat
             <button
               className={`chip ${settings.computerControl ? "on" : ""}`}
               style={settings.computerControl ? { background: "var(--c-purple)", color: "var(--c-purple-ink)", borderColor: "transparent" } : undefined}
-              title="السماح للمساعد بفتح البرامج والتحكم بالشاشة والبوابات"
+              title="السماح للمساعد بفتح البرامج والتحكم بالشاشة (البوابات متاحة دائمًا)"
               onClick={async () => setSettings(await api.ai.setPrefs({ computerControl: !settings.computerControl }))}
             >
               <Icon name="monitor" size={14} /> التحكم بالكمبيوتر {settings.computerControl ? "مفعّل" : "متوقف"}
@@ -111,15 +120,18 @@ export default function AssistantPage({ onNavigate, initialPrompt }: { onNavigat
         tabs={[
           { id: "chat", label: "المحادثة" },
           { id: "tools", label: "أدوات المهام" },
+          { id: "routines", label: "الروتينات" },
         ]}
         active={tab}
-        onChange={(id) => setTab(id as "chat" | "tools")}
+        onChange={(id) => setTab(id as "chat" | "tools" | "routines")}
       />
 
       {tab === "chat" ? (
         <ChatPane key={initialPrompt ?? "chat"} initialPrompt={initialPrompt} onNavigate={onNavigate} />
-      ) : (
+      ) : tab === "tools" ? (
         <ToolsPane onNavigate={onNavigate} />
+      ) : (
+        <RoutinesPane onNavigate={onNavigate} />
       )}
     </div>
   );
@@ -128,122 +140,52 @@ export default function AssistantPage({ onNavigate, initialPrompt }: { onNavigat
 /* ------------------------------ المحادثة ------------------------------ */
 
 function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNavigate: Navigate }) {
-  const { toast, confirm } = useUi();
+  const { confirm } = useUi();
   const [chatId, setChatId] = useState(() => uid());
-  const [messages, setMessages] = useState<AiChatMessage[]>([]);
+  const chat = useAiChat({ chatId });
   const [chats, setChats] = useState<{ id: string; title: string; updated_at: string }[]>([]);
   const [input, setInput] = useState(initialPrompt ?? "");
-  const [job, setJob] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const listRef = useRef<HTMLDivElement>(null);
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
-  const jobRef = useRef<string | null>(null);
   const sentInitial = useRef(false);
 
   const loadChats = useCallback(async () => setChats(await api.ai.chats()), []);
   useEffect(() => {
     void loadChats();
-  }, [loadChats]);
-
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
-
-  const persist = useCallback(
-    (list: AiChatMessage[]) => {
-      const first = list.find((m) => m.role === "user")?.text ?? "محادثة";
-      void api.ai.saveTranscript(chatId, first.slice(0, 80), list).then(loadChats);
-    },
-    [chatId, loadChats],
-  );
-
-  useEffect(() => {
-    const off = window.dynamo.on("app:ai", (raw) => {
-      const ev = raw as AiStreamEvent;
-      if (ev.jobId !== jobRef.current) return;
-      setMessages((list) => {
-        const next = [...list];
-        const last = next[next.length - 1];
-        if (!last || last.role !== "assistant") return list;
-        if (ev.type === "text") next[next.length - 1] = { ...last, text: last.text + ev.text };
-        if (ev.type === "tool") {
-          const tools = [...(last.tools ?? [])];
-          if (ev.phase === "start") tools.push({ name: ev.name, label: ev.label });
-          else {
-            const i = tools.findIndex((t) => t.name === ev.name && t.ok === undefined);
-            if (i >= 0) tools[i] = { ...tools[i], ok: ev.ok };
-          }
-          next[next.length - 1] = { ...last, tools };
-        }
-        if (ev.type === "approval") next[next.length - 1] = { ...last, approval: { requestId: ev.requestId, label: ev.label, detail: ev.detail } };
-        if (ev.type === "screenshot") next[next.length - 1] = { ...last, shots: [...(last.shots ?? []), { dataUrl: ev.dataUrl, label: ev.label }].slice(-6) };
-        if (ev.type === "error" || ev.type === "refusal") next[next.length - 1] = { ...last, error: ev.message, approval: undefined };
-        if (ev.type === "done") next[next.length - 1] = { ...last, text: ev.text || last.text, approval: undefined };
-        return next;
-      });
-      if (ev.type === "done" || ev.type === "error" || ev.type === "refusal") {
-        jobRef.current = null;
-        setJob(null);
-        setTimeout(() => persist(messagesRef.current), 50);
-      }
-    });
-    return off;
-  }, [persist]);
-
-  const send = useCallback(
-    async (text: string) => {
-      const clean = text.trim();
-      if (!clean || jobRef.current) return;
-      const jobId = uid();
-      jobRef.current = jobId;
-      setJob(jobId);
-      setInput("");
-      setMessages((list) => [
-        ...list,
-        { id: uid(), role: "user", text: clean, at: new Date().toISOString() },
-        { id: uid(), role: "assistant", text: "", tools: [], at: new Date().toISOString() },
-      ]);
-      await api.ai.chat(chatId, jobId, clean);
-    },
-    [chatId],
-  );
+  }, [loadChats, chat.version]);
 
   useEffect(() => {
     if (initialPrompt && !sentInitial.current) {
       sentInitial.current = true;
-      void send(initialPrompt);
+      setInput("");
+      void chat.send(initialPrompt);
     }
-  }, [initialPrompt, send]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt]);
 
-  const cancel = async () => {
-    if (jobRef.current) await api.ai.cancel(jobRef.current);
-  };
-
-  const decide = async (messageId: string, requestId: string, ok: boolean) => {
-    setMessages((list) => list.map((m) => (m.id === messageId && m.approval ? { ...m, approval: { ...m.approval, decided: true } } : m)));
-    await api.ai.approve(requestId, ok);
+  const send = (text: string) => {
+    if (!text.trim() || chat.running) return;
+    setInput("");
+    void chat.send(text);
   };
 
   const newChat = () => {
-    if (jobRef.current) return;
+    if (chat.running) return;
     setChatId(uid());
-    setMessages([]);
+    chat.setMessages([]);
     setInput("");
   };
 
   const openChat = async (id: string) => {
-    if (jobRef.current) return;
-    const t = (await api.ai.transcript(id)) as AiChatMessage[];
+    if (chat.running) return;
     setChatId(id);
-    setMessages(t);
+    await chat.load(id);
     setShowHistory(false);
   };
 
-  const running = !!job;
+  const running = chat.running;
 
   return (
-    <div className="flex-1 min-h-0 grid gap-3" style={{ gridTemplateColumns: showHistory ? "260px 1fr" : "1fr" }}>
+    <div className="flex-1 min-h-0 grid gap-3 two-col-history" style={{ gridTemplateColumns: showHistory ? "260px 1fr" : "1fr" }}>
       {showHistory && (
         <div className="panel p-3 flex flex-col min-h-0 rise">
           <div className="flex items-center justify-between mb-2">
@@ -260,12 +202,8 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
             )}
             {chats.map((c) => (
               <div key={c.id} className="flex items-center gap-1">
-                <button
-                  className="nav-item flex-1 text-[13px]"
-                  style={{ padding: "7px 9px" }}
-                  onClick={() => void openChat(c.id)}
-                >
-                  <span className="truncate">{c.title}</span>
+                <button className="nav-item flex-1 text-[13px]" style={{ padding: "7px 9px" }} onClick={() => void openChat(c.id)}>
+                  <span className="truncate">{c.id.startsWith("portal-") ? `🌐 ${c.title}` : c.title}</span>
                 </button>
                 <Button
                   size="sm"
@@ -300,107 +238,39 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
           <span className="text-xs flex items-center gap-2" style={{ color: "var(--muted)" }}>
             {running ? (
               <>
-                <span className="live-dot" style={{ background: "var(--accent)" }} /> يكتب…
+                <span className="live-dot" style={{ background: "var(--accent)" }} /> يعمل…
               </>
             ) : (
-              "يقرأ بيانات التطبيق عند الحاجة عبر أدوات آمنة"
+              "يقرأ بيانات التطبيق والبوابات عند الحاجة عبر أدوات آمنة"
             )}
           </span>
         </div>
 
-        <div ref={listRef} className="flex-1 scroll-y p-4 flex flex-col gap-3">
-          {messages.length === 0 && (
+        <ChatThread
+          messages={chat.messages}
+          running={running}
+          onDecide={(m, r, ok) => void chat.decide(m, r, ok)}
+          empty={
             <div className="my-auto text-center stagger">
               <div className="tool-icon mx-auto float" style={{ width: 64, height: 64, fontSize: 30, borderRadius: 20 }}>
                 <Icon name="sparkles" size={30} />
               </div>
               <h3 className="font-extrabold text-lg mt-2">بم أساعدك اليوم؟</h3>
               <p className="text-sm mb-4" style={{ color: "var(--muted)" }}>
-                اسألني عن بياناتك، أو اطلب مسودة، أو كلّفني بإضافة مهمة.
+                اسألني عن بياناتك أو بريدك أو اجتماعاتك، أو اطلب مسودة، أو كلّفني بإضافة مهمة.
               </p>
               <div className="flex flex-wrap gap-2 justify-center max-w-2xl mx-auto">
                 {SUGGESTIONS.map((s) => (
-                  <button key={s} className="chip" onClick={() => void send(s)}>
+                  <button key={s} className="chip" onClick={() => send(s)}>
                     {s}
                   </button>
                 ))}
               </div>
             </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-start" : "items-end"}`}>
-              {m.role === "assistant" && (m.tools ?? []).length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-1 justify-end" style={{ maxWidth: "78%" }}>
-                  {(m.tools ?? []).map((t, k) => (
-                    <span
-                      key={`${t.name}-${k}`}
-                      className={`badge ${t.ok === false ? "badge-danger" : t.ok ? "badge-ok" : "badge-accent"}`}
-                      style={{ fontSize: 11 }}
-                    >
-                      {t.ok === undefined ? "⏳" : t.ok ? "✓" : "✕"} {t.label}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {m.role === "assistant" && (m.shots ?? []).length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2 justify-end" style={{ maxWidth: "82%" }}>
-                  {(m.shots ?? []).map((sh, k) => (
-                    <img key={k} src={sh.dataUrl} alt={sh.label} title={sh.label} className="shot" onClick={() => window.open(sh.dataUrl, "_blank")} />
-                  ))}
-                </div>
-              )}
-              {m.role === "assistant" && m.approval && !m.approval.decided && (
-                <div className="approval-card mb-2 pop" style={{ maxWidth: "82%" }}>
-                  <div className="font-bold text-sm mb-1 flex items-center gap-2">
-                    <Icon name="shield" size={15} style={{ color: "var(--warn)" }} /> يطلب المساعد الإذن: {m.approval.label}
-                  </div>
-                  <pre className="text-xs whitespace-pre-wrap mb-2" style={{ color: "var(--ink-2)", fontFamily: "inherit" }}>
-                    {m.approval.detail}
-                  </pre>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="primary" onClick={() => void decide(m.id, m.approval!.requestId, true)}>
-                      <Icon name="check" size={14} /> موافق، نفّذ
-                    </Button>
-                    <Button size="sm" onClick={() => void decide(m.id, m.approval!.requestId, false)}>
-                      <Icon name="x" size={14} /> رفض
-                    </Button>
-                  </div>
-                </div>
-              )}
-              <div
-                className={`bubble ${m.role === "user" ? "bubble-user" : "bubble-assistant"} ${
-                  m.role === "assistant" && running && i === messages.length - 1 && !m.error ? "cursor-blink" : ""
-                }`}
-              >
-                {m.text || (m.role === "assistant" && !m.error && running ? "" : m.text)}
-                {m.error && (
-                  <div className="text-sm mt-1" style={{ color: "var(--danger)" }}>
-                    {m.error}
-                  </div>
-                )}
-              </div>
-              {m.role === "assistant" && m.text && !(running && i === messages.length - 1) && (
-                <div className="flex gap-1 mt-1">
-                  <Button size="sm" variant="ghost" onClick={() => copyToClipboard(m.text).then(() => toast("تم النسخ", "ok"))}>
-                    <Icon name="copy" size={13} /> نسخ
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={async () => {
-                      const p = await api.ai.saveText("رد المساعد", m.text);
-                      if (p) toast("تم الحفظ", "ok");
-                    }}
-                  >
-                    <Icon name="save" size={13} /> حفظ
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+          }
+        />
 
-        <div className="p-3" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="p-3 assistant-composer" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="flex gap-2 items-end">
             <Textarea
               value={input}
@@ -411,26 +281,227 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  void send(input);
+                  send(input);
                 }
               }}
             />
             {running ? (
-              <Button variant="danger" onClick={() => void cancel()} style={{ height: 54 }}>
+              <Button variant="danger" onClick={() => void chat.cancel()} style={{ height: 54 }}>
                 <Icon name="stop" size={16} /> إيقاف
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => void send(input)} disabled={!input.trim()} style={{ height: 54 }}>
+              <Button variant="primary" onClick={() => send(input)} disabled={!input.trim()} style={{ height: 54 }}>
                 <Icon name="send" size={16} /> إرسال
               </Button>
             )}
           </div>
-          <div className="flex items-center justify-between mt-2 text-[11px]" style={{ color: "var(--muted)" }}>
-            <span>يمكنه إنشاء مهام مباشرة في <button className="link" onClick={() => onNavigate("tasks")}>لوحة المهام</button>.</span>
+          <div className="flex items-center justify-between mt-2 text-[11px] flex-wrap gap-1" style={{ color: "var(--muted)" }}>
+            <span>
+              يمكنه إنشاء مهام مباشرة في <button className="link" onClick={() => onNavigate("tasks")}>لوحة المهام</button> وفتح{" "}
+              <button className="link" onClick={() => onNavigate("portals")}>البوابات</button> وقراءتها.
+            </span>
             <span>Ctrl+J لفتح المساعد من أي مكان</span>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------ الروتينات ------------------------------ */
+
+const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+function RoutinesPane({ onNavigate }: { onNavigate: Navigate }) {
+  const { toast, confirm } = useUi();
+  const [routines, setRoutines] = useState<AiRoutine[]>([]);
+  const [edit, setEdit] = useState<Partial<AiRoutine> | null>(null);
+  const [runningId, setRunningId] = useState<number | null>(null);
+  const [live, setLive] = useState("");
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const jobRef = useRef<string | null>(null);
+
+  const load = useCallback(async () => setRoutines(await api.ai.routines()), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const off = window.dynamo.on("app:ai", (raw) => {
+      const ev = raw as AiStreamEvent;
+      if (ev.jobId !== jobRef.current) return;
+      if (ev.type === "text") setLive((t) => t + ev.text);
+      if (ev.type === "done" || ev.type === "error" || ev.type === "refusal") {
+        jobRef.current = null;
+        setRunningId(null);
+        if (ev.type !== "done") toast(ev.message, "danger");
+        setTimeout(() => void load(), 300);
+      }
+    });
+    const offR = window.dynamo.on("app:routine", () => void load());
+    return () => {
+      off();
+      offR();
+    };
+  }, [load, toast]);
+
+  const run = async (r: AiRoutine) => {
+    if (jobRef.current) return;
+    const jobId = uid();
+    jobRef.current = jobId;
+    setRunningId(r.id);
+    setLive("");
+    setExpanded(r.id);
+    await api.ai.routineRun(r.id, jobId);
+  };
+
+  const save = async () => {
+    if (!edit?.name?.trim() || !edit.prompt?.trim()) return toast("الاسم والتعليمات مطلوبان", "danger");
+    setRoutines(await api.ai.routineSave({ ...edit, name: edit.name, prompt: edit.prompt }));
+    setEdit(null);
+    toast("تم حفظ الروتين", "ok");
+  };
+
+  return (
+    <div className="grid gap-4 flex-1 min-h-0 two-col" style={{ gridTemplateColumns: "minmax(280px, 0.8fr) minmax(360px, 1.4fr)" }}>
+      <div className="grid gap-2 content-start stagger">
+        <div className="panel p-4" style={{ borderRadius: 20 }}>
+          <h3 className="font-bold text-sm mb-1">روتينات ذكية</h3>
+          <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
+            أوامر محفوظة يشغّلها المساعد بنقرة أو تلقائيًا في وقت محدد (والتطبيق مفتوح): موجز الصباح، تحويل البريد إلى مهام، تحضير اجتماعات الغد… نتائجها تظهر هنا وتصلك بإشعار.
+          </p>
+          <Button variant="primary" onClick={() => setEdit({ name: "", prompt: "", schedule_time: null, weekdays: "0,1,2,3,4", enabled: 1 })}>
+            <Icon name="plus" size={14} /> روتين جديد
+          </Button>
+        </div>
+        <div className="panel p-3" style={{ borderRadius: 20 }}>
+          <div className="text-[12px] font-extrabold mb-2" style={{ color: "var(--muted)" }}>
+            قوالب جاهزة
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {ROUTINE_PRESETS.map((p) => (
+              <button key={p.name} className="chip justify-start" onClick={() => setEdit({ name: p.name, prompt: p.prompt, schedule_time: p.time, weekdays: "0,1,2,3,4", enabled: 1 })} title={p.prompt}>
+                <Icon name="clock" size={12} /> {p.name} · {p.time}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 content-start">
+        {routines.length === 0 && (
+          <div className="panel">
+            <EmptyState title="لا توجد روتينات بعد" hint="ابدأ بقالب جاهز من اليسار أو أنشئ روتينًا بتعليماتك" />
+          </div>
+        )}
+        {routines.map((r) => (
+          <div key={r.id} className="panel p-4" style={{ borderRadius: 20 }}>
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <div className="font-bold flex items-center gap-2 flex-wrap">
+                  {r.name}
+                  {r.schedule_time ? <Badge tone={r.enabled ? "info" : "default"}>{r.enabled ? `يوميًا ${r.schedule_time}` : "متوقف"}</Badge> : <Badge>يدوي</Badge>}
+                  {r.last_run_at && <Badge tone={r.last_ok ? "ok" : "danger"}>{r.last_ok ? "آخر تنفيذ ناجح" : "آخر تنفيذ فشل"} · {formatDateTime(r.last_run_at)}</Badge>}
+                </div>
+                <p className="text-xs mt-1 line-clamp-2" style={{ color: "var(--muted)" }}>
+                  {r.prompt}
+                </p>
+                {r.schedule_time && (
+                  <p className="text-[11px] mt-1" style={{ color: "var(--muted)" }}>
+                    الأيام: {r.weekdays.split(",").map((d) => DAYS[Number(d)]).filter(Boolean).join("، ")}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                <Button size="sm" variant="primary" disabled={runningId !== null} onClick={() => void run(r)}>
+                  <Icon name={runningId === r.id ? "clock" : "wand"} size={13} /> {runningId === r.id ? "يعمل…" : "تشغيل الآن"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => onNavigate("assistant", undefined, r.prompt)} title="تشغيله في المحادثة لمتابعة الخطوات">
+                  <Icon name="sparkles" size={13} />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEdit(r)}>
+                  <Icon name="settings" size={13} />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    if (!(await confirm(`حذف الروتين «${r.name}»؟`))) return;
+                    setRoutines(await api.ai.routineDelete(r.id));
+                  }}
+                >
+                  <Icon name="trash" size={13} />
+                </Button>
+              </div>
+            </div>
+            {(runningId === r.id || (expanded === r.id && r.last_result)) && (
+              <div className="mt-3 p-3 output-pane text-sm" style={{ background: "var(--panel-2)", borderRadius: 14, maxHeight: 320, overflow: "auto" }}>
+                {runningId === r.id ? <span className="cursor-blink">{live}</span> : r.last_result}
+              </div>
+            )}
+            {expanded !== r.id && r.last_result && runningId !== r.id && (
+              <button className="link text-xs mt-2" onClick={() => setExpanded(r.id)}>
+                عرض نتيجة آخر تنفيذ
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Modal open={!!edit} title={edit?.id ? "تعديل الروتين" : "روتين جديد"} onClose={() => setEdit(null)} width={600} footer={
+        <>
+          <Button onClick={() => setEdit(null)}>إلغاء</Button>
+          <Button variant="primary" onClick={() => void save()}>
+            حفظ
+          </Button>
+        </>
+      }>
+        {edit && (
+          <div className="grid gap-3">
+            <Field label="الاسم">
+              <Input autoFocus value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+            </Field>
+            <Field label="التعليمات (ما يفعله المساعد)" hint="اكتبها كما تكتب طلبًا في المحادثة؛ يستطيع فتح البوابات وقراءتها وإنشاء المهام.">
+              <Textarea value={edit.prompt ?? ""} onChange={(e) => setEdit({ ...edit, prompt: e.target.value })} style={{ minHeight: 110 }} />
+            </Field>
+            <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <Field label="وقت التشغيل اليومي (اختياري)">
+                <Input type="time" value={edit.schedule_time ?? ""} onChange={(e) => setEdit({ ...edit, schedule_time: e.target.value || null })} />
+              </Field>
+              <Field label="الحالة">
+                <Select value={edit.enabled ? "1" : "0"} onChange={(e) => setEdit({ ...edit, enabled: Number(e.target.value) })}>
+                  <option value="1">مفعّل</option>
+                  <option value="0">متوقف</option>
+                </Select>
+              </Field>
+            </div>
+            <div>
+              <span className="field-label">أيام التشغيل</span>
+              <div className="flex gap-1.5 flex-wrap">
+                {DAYS.map((d, i) => {
+                  const set = new Set((edit.weekdays ?? "0,1,2,3,4").split(",").filter(Boolean));
+                  const on = set.has(String(i));
+                  return (
+                    <button
+                      key={d}
+                      className="chip"
+                      style={on ? { background: "var(--nav-on-bg)", color: "var(--nav-on-ink)", borderColor: "transparent" } : undefined}
+                      onClick={() => {
+                        if (on) set.delete(String(i));
+                        else set.add(String(i));
+                        setEdit({ ...edit, weekdays: [...set].sort().join(",") });
+                      }}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <Toggle on={!!edit.schedule_time} onChange={(v) => setEdit({ ...edit, schedule_time: v ? "08:00" : null })} label="تشغيل تلقائي يومي" hint="يعمل فقط والتطبيق مفتوح على هذا الجهاز" />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -504,7 +575,7 @@ function ToolsPane({ onNavigate }: { onNavigate: Navigate }) {
   };
 
   return (
-    <div className="grid gap-4 flex-1 min-h-0" style={{ gridTemplateColumns: "300px 1fr" }}>
+    <div className="grid gap-4 flex-1 min-h-0 two-col" style={{ gridTemplateColumns: "300px 1fr" }}>
       <div className="grid gap-2 content-start stagger">
         <div className="panel p-3" style={{ borderRadius: 20 }}>
           <div className="text-[12px] font-extrabold mb-2" style={{ color: "var(--muted)" }}>
@@ -512,7 +583,7 @@ function ToolsPane({ onNavigate }: { onNavigate: Navigate }) {
           </div>
           <div className="flex flex-col gap-1.5">
             {[
-              { l: "ملخص بريد Outlook → مهام", q: "افتح Outlook، اقرأ الرسائل غير المقروءة، لخّصها، وأنشئ مهمة لكل طلب فيها." },
+              { l: "ملخص بريد Outlook → مهام", q: "افتح Outlook، اقرأ الرسائل غير المقروءة، لخّصها، وأنشئ مهمة لكل طلب فيها مع رابط الرسالة." },
               { l: "اجتماعات Teams اليوم", q: "افتح Teams واعرض اجتماعاتي اليوم مع أوقاتها، ثم أضف تذكيرًا كمهمة لكل اجتماع مهم." },
               { l: "حالة الدورات في Hub", q: "افتح لوحة الدورات Hub واستخرج جدولًا بالدورات الحالية وحالتها وأعداد المسجلين." },
               { l: "بحث في SharePoint", q: "ابحث في بوابة SharePoint عن: " },
@@ -627,7 +698,7 @@ function ToolsPane({ onNavigate }: { onNavigate: Navigate }) {
           </div>
 
           <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder[active]} style={{ minHeight: 120 }} />
-          <div className="flex items-center gap-2 mt-3">
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
             {running ? (
               <Button variant="danger" onClick={() => void stop()}>
                 <Icon name="stop" size={15} /> إيقاف

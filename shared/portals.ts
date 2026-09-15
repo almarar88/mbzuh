@@ -54,7 +54,27 @@ export interface PortalTabState {
   canGoBack: boolean;
   canGoForward: boolean;
   error: string | null;
+  /** مشكلة في شهادة الأمان تمنع التحميل؛ يمكن للمستخدم الوثوق بها صراحةً. */
+  certIssue: { host: string; fingerprint: string; issuer: string; error: string } | null;
   zoom: number;
+}
+
+/** يترجم أكواد أخطاء الشبكة في Chromium إلى رسائل عربية مفهومة. */
+export function describeLoadError(code: number, desc: string): string {
+  const map: Record<string, string> = {
+    ERR_CERT_AUTHORITY_INVALID: "شهادة الأمان لهذا الموقع غير موثوقة على هذا الجهاز (جهة الإصدار غير معروفة).",
+    ERR_CERT_COMMON_NAME_INVALID: "شهادة الأمان لا تطابق اسم الموقع.",
+    ERR_CERT_DATE_INVALID: "شهادة الأمان منتهية الصلاحية أو تاريخ الجهاز غير صحيح.",
+    ERR_NAME_NOT_RESOLVED: "تعذّر العثور على عنوان الموقع. إن كان الموقع داخليًا فتأكد من الاتصال بشبكة الجامعة أو VPN.",
+    ERR_INTERNET_DISCONNECTED: "لا يوجد اتصال بالإنترنت.",
+    ERR_CONNECTION_REFUSED: "الخادم رفض الاتصال.",
+    ERR_CONNECTION_TIMED_OUT: "انتهت مهلة الاتصال بالموقع. قد يكون الموقع داخليًا ويتطلب شبكة الجامعة.",
+    ERR_CONNECTION_RESET: "انقطع الاتصال بالموقع.",
+    ERR_SSL_PROTOCOL_ERROR: "خطأ في بروتوكول الأمان مع الموقع.",
+    ERR_PROXY_CONNECTION_FAILED: "تعذّر الاتصال عبر خادم البروكسي.",
+    ERR_BLOCKED_BY_CLIENT: "حُظر الطلب على هذا الجهاز.",
+  };
+  return `${map[desc] ?? "تعذّر تحميل الصفحة."} (${desc} ${code})`;
 }
 
 export interface PortalsState {

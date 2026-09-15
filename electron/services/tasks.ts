@@ -24,8 +24,8 @@ export function createTask(input: Partial<Task> & { title: string }): Task {
   const id = Number(
     db
       .prepare(
-        `INSERT INTO tasks(title, description, status, priority, due_date, tags, source, position, completed_at)
-         VALUES(?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO tasks(title, description, status, priority, due_date, tags, source, source_url, source_portal, position, completed_at)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         input.title.trim(),
@@ -35,6 +35,8 @@ export function createTask(input: Partial<Task> & { title: string }): Task {
         input.due_date || null,
         input.tags || null,
         input.source ?? null,
+        input.source_url || null,
+        input.source_portal || null,
         maxPos + 1,
         status === "done" ? new Date().toISOString() : null,
       ).lastInsertRowid,
@@ -53,7 +55,7 @@ export function updateTask(id: number, patch: Partial<Task>): Task | null {
     status === "done" ? current.completed_at ?? new Date().toISOString() : null;
   db.prepare(
     `UPDATE tasks SET title=@title, description=@description, status=@status, priority=@priority, due_date=@due_date,
-            tags=@tags, position=@position, completed_at=@completed_at, updated_at=datetime('now') WHERE id=@id`,
+            tags=@tags, source_url=@source_url, source_portal=@source_portal, position=@position, completed_at=@completed_at, updated_at=datetime('now') WHERE id=@id`,
   ).run({
     id,
     title: (patch.title ?? current.title).trim() || current.title,
@@ -62,6 +64,8 @@ export function updateTask(id: number, patch: Partial<Task>): Task | null {
     priority,
     due_date: patch.due_date === undefined ? current.due_date : patch.due_date || null,
     tags: patch.tags === undefined ? current.tags : patch.tags || null,
+    source_url: patch.source_url === undefined ? current.source_url : patch.source_url || null,
+    source_portal: patch.source_portal === undefined ? current.source_portal : patch.source_portal || null,
     position: patch.position ?? current.position,
     completed_at: completed,
   });

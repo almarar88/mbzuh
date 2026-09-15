@@ -70,8 +70,10 @@ function runShell(command: string, timeoutMs = 60_000): Promise<{ stdout: string
   });
 }
 
+const FORMS = `Add-Type -AssemblyName System.Windows.Forms`;
+
 const USER32 = `
-Add-Type -AssemblyName System.Windows.Forms
+${FORMS}
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;
@@ -114,7 +116,7 @@ function psQuote(s: string): string {
 
 let lastShot: { scale: number; offsetX: number; offsetY: number } = { scale: 1, offsetX: 0, offsetY: 0 };
 
-async function takeScreenshot(): Promise<{ png: Buffer; width: number; height: number; screenW: number; screenH: number }> {
+async function takeScreenshot(): Promise<{ jpeg: Buffer; width: number; height: number; screenW: number; screenH: number }> {
   const display = screen.getPrimaryDisplay();
   const { width: screenW, height: screenH } = display.size;
   const maxW = 1366;
@@ -126,7 +128,7 @@ async function takeScreenshot(): Promise<{ png: Buffer; width: number; height: n
   const img = primary.thumbnail;
   const size = img.getSize();
   lastShot = { scale: size.width / screenW, offsetX: display.bounds.x, offsetY: display.bounds.y };
-  return { png: img.toPNG(), width: size.width, height: size.height, screenW, screenH };
+  return { jpeg: img.toJPEG(72), width: size.width, height: size.height, screenW, screenH };
 }
 
 function toScreen(x: number, y: number): { x: number; y: number } {
@@ -192,10 +194,10 @@ export function computerTools(): ToolDef[] {
         const shot = await takeScreenshot();
         return {
           __blocks: [
-            { type: "image", source: { type: "base64", media_type: "image/png", data: shot.png.toString("base64") } },
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: shot.jpeg.toString("base64") } },
             { type: "text", text: `أبعاد اللقطة ${shot.width}×${shot.height} (الشاشة الفعلية ${shot.screenW}×${shot.screenH}). استخدم إحداثيات اللقطة عند النقر.` },
           ],
-          __preview: `data:image/png;base64,${shot.png.toString("base64")}`,
+          __preview: `data:image/jpeg;base64,${shot.jpeg.toString("base64")}`,
         };
       },
       preview: (_i, out) => (out as { __preview?: string })?.__preview ?? null,
@@ -248,7 +250,7 @@ export function computerTools(): ToolDef[] {
       approval: gui("كتابة نص"),
       run: async (input) => {
         const text = String(input.text ?? "");
-        const script = `${USER32}\n[System.Windows.Forms.SendKeys]::SendWait(${psQuote(escapeSendKeys(text))})${input.press_enter ? "\n[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')" : ""}`;
+        const script = `${FORMS}\n[System.Windows.Forms.SendKeys]::SendWait(${psQuote(escapeSendKeys(text))})${input.press_enter ? "\n[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')" : ""}`;
         await runPowerShell(script, 30_000);
         return { ok: true, typed: text.length, enter: !!input.press_enter };
       },
@@ -263,7 +265,7 @@ export function computerTools(): ToolDef[] {
       approval: gui("ضغط مفاتيح"),
       run: async (input) => {
         const combos = String(input.keys ?? "").split(",").map((c) => c.trim()).filter(Boolean);
-        const script = `${USER32}\n${combos.map((c) => `[System.Windows.Forms.SendKeys]::SendWait(${psQuote(toSendKeys(c))}); Start-Sleep -Milliseconds 120`).join("\n")}`;
+        const script = `${FORMS}\n${combos.map((c) => `[System.Windows.Forms.SendKeys]::SendWait(${psQuote(toSendKeys(c))}); Start-Sleep -Milliseconds 120`).join("\n")}`;
         await runPowerShell(script, 30_000);
         return { ok: true, pressed: combos };
       },

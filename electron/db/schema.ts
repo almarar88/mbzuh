@@ -235,6 +235,37 @@ CREATE TABLE IF NOT EXISTS ai_chats (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS ai_memory (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  fact TEXT NOT NULL,
+  source TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ai_routines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  schedule_time TEXT,
+  weekdays TEXT NOT NULL DEFAULT '0,1,2,3,4',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  last_run_at TEXT,
+  last_ok INTEGER,
+  last_result TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ai_briefs (
+  day TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
-export const SCHEMA_VERSION = 2;
+/** ترقيات تدريجية للمخطط (تُنفَّذ مرة واحدة حسب الإصدار المحفوظ). */
+export const MIGRATIONS: { version: number; sql: string[] }[] = [
+  { version: 3, sql: ["ALTER TABLE tasks ADD COLUMN source_url TEXT", "ALTER TABLE tasks ADD COLUMN source_portal TEXT"] },
+];
+
+export const SCHEMA_VERSION = 3;

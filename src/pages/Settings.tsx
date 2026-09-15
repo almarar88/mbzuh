@@ -3,7 +3,7 @@ import { api, type SystemInfo } from "../lib/api";
 import { Badge, Button, EmptyState, Field, Input, Modal, PageHeader, Panel, Select, Toggle, useUi } from "../components/ui";
 import { Icon } from "../components/icons";
 import { formatDateTime } from "@shared/text";
-import { AI_MODELS, type AiEffort, type AiSettings } from "@shared/types";
+import { AI_MODELS, type AiEffort, type AiMemoryFact, type AiSettings } from "@shared/types";
 import { PORTAL_COLORS, type PortalColor, type PortalConfig, type PortalsState } from "@shared/portals";
 import { isMobileRuntime } from "../platform/runtime";
 
@@ -25,6 +25,8 @@ export default function SettingsPage({ onThemeChange, onOrgChange }: { onThemeCh
   const [editPortal, setEditPortal] = useState<PortalConfig | null>(null);
   const [credPortal, setCredPortal] = useState<PortalConfig | null>(null);
   const [credDraft, setCredDraft] = useState({ username: "", password: "", autofill: true, autoSubmit: true });
+  const [memory, setMemory] = useState<AiMemoryFact[]>([]);
+  const [memDraft, setMemDraft] = useState("");
 
   const load = useCallback(async () => {
     const [system, settings, list, aiSettings, portalState, credSummary] = await Promise.all([
@@ -42,6 +44,7 @@ export default function SettingsPage({ onThemeChange, onOrgChange }: { onThemeCh
     setAi(aiSettings);
     setPortals(portalState);
     setCreds(credSummary);
+    setMemory(await api.ai.memory());
   }, []);
 
   useEffect(() => {
@@ -234,6 +237,53 @@ export default function SettingsPage({ onThemeChange, onOrgChange }: { onThemeCh
               </span>
             )}
           </div>
+        </Panel>
+
+        {/* ------------------------------ ذاكرة المساعد ------------------------------ */}
+        <Panel>
+          <h3 className="font-extrabold text-[15px] mb-1 flex items-center gap-2">
+            <Icon name="layers" size={16} style={{ color: "var(--c-lime)" }} /> ذاكرة المساعد
+          </h3>
+          <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
+            حقائق يتذكرها المساعد في كل محادثة (مديرك، مسؤولياتك، الجهات التي تتابعها، تفضيلاتك في الصياغة). يضيفها بنفسه عندما يتعلم شيئًا مفيدًا، ويمكنك إضافتها أو حذفها هنا.
+          </p>
+          <div className="flex gap-2 mb-3">
+            <Input value={memDraft} onChange={(e) => setMemDraft(e.target.value)} placeholder="مثال: مديري المباشر هو د. أحمد، وأتابع دورات مركز التعليم المستمر" onKeyDown={async (e) => {
+              if (e.key === "Enter" && memDraft.trim()) {
+                setMemory(await api.ai.memoryAdd(memDraft));
+                setMemDraft("");
+              }
+            }} />
+            <Button
+              variant="primary"
+              disabled={!memDraft.trim()}
+              onClick={async () => {
+                setMemory(await api.ai.memoryAdd(memDraft));
+                setMemDraft("");
+              }}
+            >
+              إضافة
+            </Button>
+          </div>
+          {memory.length === 0 ? (
+            <EmptyState title="الذاكرة فارغة" hint="أخبر المساعد في المحادثة: «تذكّر أن…»" />
+          ) : (
+            <ul className="space-y-1.5 scroll-y" style={{ maxHeight: 240 }}>
+              {memory.map((m) => (
+                <li key={m.id} className="flex items-start justify-between gap-2 text-sm">
+                  <span style={{ color: "var(--ink-2)" }}>
+                    {m.fact}
+                    <span className="text-[11px] mx-1" style={{ color: "var(--muted)" }}>
+                      · {m.source === "ai" ? "تعلّمها المساعد" : "أضفتها أنت"}
+                    </span>
+                  </span>
+                  <Button size="sm" variant="ghost" className="btn-icon" style={{ width: 26, height: 26 }} onClick={async () => setMemory(await api.ai.memoryDelete(m.id))}>
+                    <Icon name="trash" size={12} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
 
         {/* ------------------------------ التحكم بالكمبيوتر ------------------------------ */}

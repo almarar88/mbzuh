@@ -1,22 +1,38 @@
 /**
- * البوابات الجامعية المدمجة (UMS، لوحة الدورات Hub، موقع الجامعة، وأي بوابة يضيفها
- * المستخدم) داخل التطبيق.
+ * البوابات الجامعية المدمجة (UMS، لوحة الدورات Hub، Outlook، Teams، SharePoint، OneHub،
+ * موقع الجامعة، وأي بوابة يضيفها المستخدم) داخل التطبيق.
  *
  * كل بوابة تُعرض في WebContentsView خاص بها (جلسة واحدة دائمة «persist:mbzuh-portals»
  * تحفظ تسجيل الدخول وتسمح بالدخول الموحّد بين أنظمة الجامعة). تُحقن أنماط «المظهر
- * الحديث» فوق الموقع اختياريًا، ويمكن للمساعد الذكي قراءة الصفحة النشطة والتحكم فيها.
+ * الحديث» فوق الموقع اختياريًا، ويمكن للمساعد الذكي قراءة الصفحة النشطة والتحكم فيها
+ * عبر واجهة PortalDriver.
  */
-import { BrowserWindow, WebContentsView, safeStorage, session, shell } from "electron";
+import { BrowserWindow, WebContentsView, safeStorage, session, shell, type WebContents } from "electron";
 import { getSetting, setSetting } from "../db";
 import { DARK_CSS, MODERN_CSS } from "../../shared/ums-theme";
-import { AUTOFILL_JS, isPortalInternalUrl, normalizeUrl, parsePortals, type PortalConfig, type PortalCredential, type PortalTabState, type PortalsState } from "../../shared/portals";
+import {
+  AUTOFILL_JS,
+  describeLoadError,
+  isPortalInternalUrl,
+  normalizeUrl,
+  parsePortals,
+  type PortalConfig,
+  type PortalCredential,
+  type PortalTabState,
+  type PortalsState,
+} from "../../shared/portals";
+import type { PortalDriver } from "./portal-tools";
 
 const PARTITION = "persist:mbzuh-portals";
+const TRUST_SETTING = "portal_cert_trust";
 
 interface Tab {
   view: WebContentsView;
   cssKeys: { modern?: string; dark?: string };
   error: string | null;
+  certIssue: PortalTabState["certIssue"];
+  /** آخر خطأ شهادة رُصد (قد يكون لمورد فرعي)؛ يُعرض فقط إن أفشل تحميل الصفحة الرئيسية. */
+  lastCert: PortalTabState["certIssue"];
   zoom: number;
   autofills: { host: string; count: number; at: number };
 }
@@ -53,12 +69,23 @@ export function credentialSummary(): Record<string, { username: string; autofill
   return out;
 }
 
-export class PortalManager {
+/* --------------------------- الشهادات الموثوقة --------------------------- */
+
+function trustedCerts(): Set<string> {
+  try {
+    return new Set(JSON.parse(getSetting(TRUST_SETTING, "[]")) as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+export class PortalManager implements PortalDriver {
   private win: BrowserWindow | null = null;
   private tabs = new Map<string, Tab>();
   private active: string | null = null;
   private visible = false;
   private bounds = { x: 0, y: 0, width: 0, height: 0 };
+  private broadcastTimer: ReturnType<typeof setTimeout> | null = null;
 
   attach(win: BrowserWindow): void {
     this.win = win;
@@ -102,9 +129,17 @@ export class PortalManager {
     const ses = session.fromPartition(PARTITION);
     ses.setUserAgent(ses.getUserAgent().replace(/ Electron\/[\d.]+/, "").replace(/ mbzuh-admin\/[\d.]+/i, ""));
     const view = new WebContentsView({
-      webPreferences: { partition: PARTITION, contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+      webPreferences: {
+        partition: PARTITION,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        spellcheck: false,
+        // تبقى الصفحة حيّة (مؤقتات ورسوم) حتى وهي مخفية، ليتمكن المساعد من قراءتها من أي صفحة في التطبيق.
+        backgroundThrottling: false,
+      },
     });
-    const tab: Tab = { view, cssKeys: {}, error: null, zoom: 1, autofills: { host: "", count: 0, at: 0 } };
+    const tab: Tab = { view, cssKeys: {}, error: null, certIssue: null, lastCert: null, zoom: 1, autofills: { host: "", count: 0, at: 0 } };
     view.setBackgroundColor("#f6f3ec");
     const wc = view.webContents;
     wc.setWindowOpenHandler(({ url }) => {
@@ -117,6 +152,7 @@ export class PortalManager {
     wc.on("did-stop-loading", bc);
     wc.on("did-navigate", () => {
       tab.error = null;
+      tab.certIssue = null;
       bc();
     });
     wc.on("did-navigate-in-page", bc);
@@ -126,13 +162,30 @@ export class PortalManager {
       void this.applyTheme(id);
       void this.applyAutofill(id);
     });
+    // نوافذ «هل تريد مغادرة الصفحة؟» تعلّق التنقّل الآلي؛ لا نسمح بها.
+    wc.on("will-prevent-unload", (e) => e.preventDefault());
     wc.on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
       if (!isMainFrame || code === -3) return;
-      tab.error = `تعذّر تحميل ${url} — ${desc} (${code})`;
+      tab.error = describeLoadError(code, desc);
+      let host = "";
+      try {
+        host = new URL(url).hostname;
+      } catch {
+        /* تجاهل */
+      }
+      tab.certIssue = /^ERR_CERT_/.test(desc) && tab.lastCert && tab.lastCert.host === host ? tab.lastCert : null;
       bc();
     });
     wc.on("render-process-gone", (_e, details) => {
       tab.error = `توقفت صفحة البوابة (${details.reason}). أعد التحميل.`;
+      bc();
+    });
+    wc.on("unresponsive", () => {
+      tab.error = "الصفحة لا تستجيب. أعد التحميل أو انتظر قليلًا.";
+      bc();
+    });
+    wc.on("responsive", () => {
+      if (tab.error?.startsWith("الصفحة لا تستجيب")) tab.error = null;
       bc();
     });
     this.win.contentView.addChildView(view);
@@ -217,6 +270,7 @@ export class PortalManager {
       canGoBack: alive ? wc!.navigationHistory.canGoBack() : false,
       canGoForward: alive ? wc!.navigationHistory.canGoForward() : false,
       error: tab?.error ?? null,
+      certIssue: tab?.certIssue ?? null,
       zoom: tab?.zoom ?? 1,
     };
   }
@@ -225,9 +279,14 @@ export class PortalManager {
     return { active: this.active, portals: this.list(), tabs: [...this.tabs.keys()].map((id) => this.tabState(id)) };
   }
 
+  /** بث الحالة للواجهة مع تجميع الأحداث المتلاحقة (تحديثات العنوان من Outlook/Teams كثيرة). */
   private broadcast(): void {
-    if (!this.win || this.win.isDestroyed()) return;
-    this.win.webContents.send("app:portals", this.state());
+    if (this.broadcastTimer) return;
+    this.broadcastTimer = setTimeout(() => {
+      this.broadcastTimer = null;
+      if (!this.win || this.win.isDestroyed()) return;
+      this.win.webContents.send("app:portals", this.state());
+    }, 80);
   }
 
   /** يفعّل بوابة ويعرضها في المساحة المحددة. */
@@ -344,7 +403,45 @@ export class PortalManager {
     if (url) void shell.openExternal(url);
   }
 
-  /* -------------------- واجهة للمساعد الذكي -------------------- */
+  /* ----------------------------- الشهادات ----------------------------- */
+
+  /**
+   * يُستدعى من حدث app «certificate-error». يقبل الشهادة إن كان المستخدم قد وثق بها
+   * صراحةً (المضيف + البصمة)، وإلا يرفضها ويسجّل المشكلة لعرضها في الواجهة مع زر الوثوق.
+   */
+  onCertificateError(wc: WebContents, url: string, error: string, cert: Electron.Certificate): boolean {
+    const entry = [...this.tabs.entries()].find(([, t]) => t.view.webContents.id === wc.id);
+    if (!entry) return false;
+    let host = "";
+    try {
+      host = new URL(url).hostname;
+    } catch {
+      return false;
+    }
+    // الوثوق على مستوى المضيف (لا البصمة) لأن بعض الخوادم الداخلية تقدّم شهادات متعددة/متجددة.
+    if (trustedCerts().has(host)) return true;
+    entry[1].lastCert = { host, fingerprint: cert.fingerprint, issuer: cert.issuerName || cert.issuer?.organizations?.[0] || "غير معروف", error };
+    return false;
+  }
+
+  /** يوثّق بالشهادة الحالية المرفوضة لبوابة ويعيد تحميلها. */
+  trustCertificate(id: string): PortalsState {
+    const tab = this.tabs.get(id);
+    if (!tab?.certIssue) return this.state();
+    const set = trustedCerts();
+    set.add(tab.certIssue.host);
+    setSetting(TRUST_SETTING, JSON.stringify([...set]));
+    tab.certIssue = null;
+    tab.lastCert = null;
+    tab.error = null;
+    const cfg = this.config(id);
+    const wc = tab.view.webContents;
+    const current = wc.getURL();
+    void wc.loadURL(current && current !== "about:blank" ? current : (cfg?.url ?? ""));
+    return this.state();
+  }
+
+  /* -------------------- واجهة للمساعد الذكي (PortalDriver) -------------------- */
 
   activeId(): string | null {
     return this.active;
@@ -353,21 +450,30 @@ export class PortalManager {
   /** ينفّذ JavaScript داخل البوابة النشطة ويعيد الناتج. */
   async evaluate<T>(code: string): Promise<T> {
     const { tab } = this.activeTab();
+    if (tab.error) throw new Error(`البوابة لم تُحمَّل: ${tab.error}`);
     return (await tab.view.webContents.executeJavaScript(code, true)) as T;
   }
 
-  async capture(): Promise<{ png: Buffer; width: number; height: number }> {
+  async capture(): Promise<{ jpeg: string; width: number; height: number }> {
     const { tab } = this.activeTab();
     const img = await tab.view.webContents.capturePage();
     const size = img.getSize();
-    return { png: img.toPNG(), width: size.width, height: size.height };
+    const scaled = size.width > 1280 ? img.resize({ width: 1280 }) : img;
+    const s = scaled.getSize();
+    return { jpeg: scaled.toJPEG(72).toString("base64"), width: s.width, height: s.height };
   }
 
   async loadUrl(url: string): Promise<void> {
     const { tab, cfg } = this.activeTab();
     const target = normalizeUrl(url);
     if (!isPortalInternalUrl(target, cfg.url)) throw new Error("الرابط خارج نطاق البوابة.");
-    await tab.view.webContents.loadURL(target);
+    tab.error = null;
+    try {
+      await tab.view.webContents.loadURL(target);
+    } catch (e) {
+      // ERR_ABORTED يحدث عند إعادة التوجيه داخل التطبيقات أحادية الصفحة — ليس خطأ فعليًا.
+      if (!/ERR_ABORTED/.test(String(e))) throw e;
+    }
   }
 }
 

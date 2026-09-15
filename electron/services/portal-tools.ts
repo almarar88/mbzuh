@@ -1,14 +1,42 @@
 /**
- * أدوات المساعد الذكي للتحكم في البوابات الجامعية المدمجة (UMS، Hub، Outlook، Teams،
- * SharePoint، OneHub…): فتح البوابة، انتظار التحميل، قراءة الصفحة (نص، عناوين، جداول،
- * روابط، أزرار، حقول، عناصر القوائم مثل رسائل البريد)، التنقّل، النقر، التعبئة،
- * التمرير، ولقطة للصفحة. تعمل داخل WebContentsView عبر executeJavaScript.
+ * أدوات المساعد الذكي للتحكم في البوابات الجامعية (UMS، Hub، Outlook، Teams، SharePoint،
+ * OneHub…): فتح البوابة، انتظار التحميل، قراءة الصفحة (نص، عناوين، جداول، روابط، أزرار،
+ * حقول، عناصر القوائم مثل رسائل البريد)، التنقّل، النقر، التعبئة، التمرير، ولقطة للصفحة.
+ *
+ * الأدوات لا تعرف شيئًا عن Electron أو أندرويد: تعمل عبر «سائق بوابات» (PortalDriver)
+ * يوفّره سطح المكتب (WebContentsView) أو الجوال (WebView أصلي عبر الجسر).
  */
 import type { AiSettings } from "../../shared/types";
-import { portals } from "./portals";
+import type { PortalsState } from "../../shared/portals";
 import type { ToolDef } from "./ai";
 
+export interface PortalDriver {
+  state(): PortalsState;
+  /** يفعّل البوابة (ويفتحها إن لم تكن مفتوحة). */
+  open(id: string): Promise<PortalsState> | PortalsState;
+  loadUrl(url: string): Promise<void>;
+  navigate(action: "back" | "reload" | "home"): unknown;
+  /** ينفّذ JavaScript في البوابة النشطة ويعيد الناتج (JSON). */
+  evaluate<T>(code: string): Promise<T>;
+  /** لقطة للبوابة النشطة (JPEG مضغوط). */
+  capture(): Promise<{ jpeg: string; width: number; height: number }>;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** يفشل بعد مهلة بدل التعليق (مثلًا عندما تعرض الصفحة alert أو تكون غير مستجيبة). */
+export function withTimeout<T>(p: Promise<T>, ms: number, what = "العملية"): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    p.finally(() => clearTimeout(timer)),
+    new Promise<T>((_r, reject) => {
+      timer = setTimeout(() => reject(new Error(`${what} لم تكتمل خلال ${Math.round(ms / 1000)} ثانية — الصفحة قد تكون غير مستجيبة أو تعرض نافذة تنبيه.`)), ms);
+    }),
+  ]);
+}
+
+const LOGIN_RE = `/login\\.microsoftonline|login\\.live|id\\.mbzuh|uaepass|\\/login|signin/i`;
+export const LOGIN_PROBE_JS = `({ url: location.href, title: document.title, loginPage: ${LOGIN_RE}.test(location.href) || !!document.querySelector("input[type=password]") })`;
 
 function readPageJs(selector: string | null, maxChars: number): string {
   const scope = selector ? `document.querySelector(${JSON.stringify(selector)}) || document.body` : "document.body";
@@ -19,7 +47,7 @@ function readPageJs(selector: string | null, maxChars: number): string {
   const visible = (el) => { try { const r = el.getBoundingClientRect(); const st = getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none"; } catch { return false; } };
   const q = (sel) => [...root.querySelectorAll(sel)].filter(visible);
   const label = (el) => clean(el.getAttribute("aria-label") || el.title || el.innerText || el.value || "");
-  const loginPage = /login\\.microsoftonline|login\\.live|id\\.mbzuh|uaepass|\\/login|signin/i.test(location.href) || !!document.querySelector("input[type=password]");
+  const loginPage = ${LOGIN_RE}.test(location.href) || !!document.querySelector("input[type=password]");
   const links = q("a[href]").slice(0, 80).map((a, i) => ({ i, text: clean(a.innerText || a.getAttribute("aria-label")).slice(0, 80), href: a.href }));
   const buttons = q("button, input[type=submit], input[type=button], [role=button], [role=tab], [role=menuitem]").slice(0, 80).map((b, i) => ({ i, text: label(b).slice(0, 80), id: b.id || null }));
   const fields = q("input:not([type=hidden]), select, textarea, [contenteditable=true], [role=textbox], [role=searchbox], [role=combobox]").slice(0, 60).map((f, i) => ({
@@ -94,42 +122,46 @@ const PRESS_ENTER_JS = `(() => { const el = document.activeElement; if (!el) ret
   const f = el.form; if (f) { try { f.requestSubmit ? f.requestSubmit() : f.submit(); } catch {} }
   return true; })()`;
 
-/** ينتظر اكتمال التحميل واستقرار المحتوى (حتى ~8 ثوانٍ). */
-async function waitForContent(minChars = 200, timeoutMs = 8000): Promise<void> {
-  const start = Date.now();
-  let lastLen = -1;
-  let stable = 0;
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const info = await portals.evaluate<{ ready: string; len: number }>(
-        `({ ready: document.readyState, len: (document.body && document.body.innerText || "").length })`,
-      );
-      if (info.ready === "complete" && info.len >= minChars) {
-        if (info.len === lastLen) stable++;
-        else stable = 0;
-        lastLen = info.len;
-        if (stable >= 2) return;
-      }
-    } catch {
-      /* الصفحة تنتقل */
-    }
-    await sleep(500);
-  }
-}
+/** إجراءات حسّاسة داخل الصفحات تتطلب موافقة المستخدم دائمًا (إرسال، حذف، اعتماد، دفع…). */
+const SENSITIVE_RE = /\b(send|submit|delete|remove|approve|reject|pay|purchase|confirm|sign)\b|إرسال|أرسل|حذف|احذف|اعتماد|اعتمد|رفض|دفع|تأكيد|توقيع|إلغاء الاشتراك/i;
 
-export function portalTools(): ToolDef[] {
+export function portalTools(driver: PortalDriver): ToolDef[] {
+  const evaluate = <T,>(js: string) => withTimeout(driver.evaluate<T>(js), 20_000, "قراءة الصفحة");
+
+  /** ينتظر اكتمال التحميل واستقرار المحتوى (حتى ~8 ثوانٍ). */
+  async function waitForContent(minChars = 200, timeoutMs = 8000): Promise<void> {
+    const start = Date.now();
+    let lastLen = -1;
+    let stable = 0;
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const info = await evaluate<{ ready: string; len: number }>(`({ ready: document.readyState, len: (document.body && document.body.innerText || "").length })`);
+        if (info.ready === "complete" && info.len >= minChars) {
+          if (info.len === lastLen) stable++;
+          else stable = 0;
+          lastLen = info.len;
+          if (stable >= 2) return;
+        }
+      } catch {
+        /* الصفحة تنتقل */
+      }
+      await sleep(500);
+    }
+  }
+
   const gui = (label: string) => (_i: Record<string, unknown>, s: AiSettings) => (s.confirmGui ? label : null);
+
   return [
     {
       label: "قائمة البوابات",
       tool: {
         name: "portal_list",
-        description: "يعيد البوابات الجامعية المدمجة في التطبيق (ums, cec, outlook, teams, sharepoint, onehub, site…) والبوابة المفتوحة حاليًا. استخدمها قبل التعامل مع أي نظام جامعي.",
+        description: "يعيد البوابات الجامعية المدمجة في التطبيق (ums, cec, outlook, teams, sharepoint, onehub, site…) والبوابة المفتوحة حاليًا وصفحتها. استخدمها قبل التعامل مع أي نظام جامعي.",
         input_schema: { type: "object", properties: {}, additionalProperties: false },
       },
       run: () => {
-        const s = portals.state();
-        return { active: s.active, portals: s.portals.map((p) => ({ id: p.id, name: p.name, url: p.url, hint: p.hint })), openTabs: s.tabs };
+        const s = driver.state();
+        return { active: s.active, portals: s.portals.map((p) => ({ id: p.id, name: p.name, url: p.url, hint: p.hint })), openTabs: s.tabs.map((t) => ({ id: t.id, url: t.url, title: t.title, error: t.error })) };
       },
     },
     {
@@ -140,13 +172,12 @@ export function portalTools(): ToolDef[] {
         input_schema: { type: "object", properties: { id: { type: "string" }, url: { type: "string", description: "رابط اختياري داخل نطاق البوابة يُفتح مباشرة" } }, required: ["id"], additionalProperties: false },
       },
       run: async (input) => {
-        const s = portals.open(String(input.id ?? ""));
-        if (typeof input.url === "string" && input.url.trim()) await portals.loadUrl(input.url.trim());
+        const s = await driver.open(String(input.id ?? ""));
+        if (typeof input.url === "string" && input.url.trim()) await driver.loadUrl(input.url.trim());
         await waitForContent();
-        const info = await portals.evaluate<{ url: string; title: string; loginPage: boolean }>(
-          `({ url: location.href, title: document.title, loginPage: /login\\.microsoftonline|login\\.live|id\\.mbzuh|uaepass|\\/login|signin/i.test(location.href) || !!document.querySelector("input[type=password]") })`,
-        );
-        return { ok: true, active: s.active, ...info, hint: info.loginPage ? "الصفحة تطلب تسجيل الدخول — اطلب من المستخدم الدخول ثم أعد المحاولة." : undefined };
+        const info = await evaluate<{ url: string; title: string; loginPage: boolean }>(LOGIN_PROBE_JS);
+        const tab = s.tabs.find((t) => t.id === s.active);
+        return { ok: !tab?.error, active: s.active, error: tab?.error ?? undefined, ...info, hint: info.loginPage ? "الصفحة تطلب تسجيل الدخول — اطلب من المستخدم الدخول ثم أعد المحاولة." : undefined };
       },
     },
     {
@@ -170,10 +201,10 @@ export function portalTools(): ToolDef[] {
         await waitForContent();
         const selector = typeof input.selector === "string" && input.selector.trim() ? input.selector.trim() : null;
         const max = Math.min(40000, Math.max(500, Number(input.max_chars ?? 12000)));
-        let result = await portals.evaluate<{ textLength: number }>(readPageJs(selector, max));
+        let result = await evaluate<{ textLength: number }>(readPageJs(selector, max));
         if (result.textLength < 200) {
           await sleep(2500);
-          result = await portals.evaluate(readPageJs(selector, max));
+          result = await evaluate(readPageJs(selector, max));
         }
         return result;
       },
@@ -191,23 +222,27 @@ export function portalTools(): ToolDef[] {
       },
       run: async (input) => {
         const action = String(input.action ?? "url");
-        if (action === "url") await portals.loadUrl(String(input.url ?? ""));
-        else portals.navigate(action as "back" | "reload" | "home");
+        if (action === "url") await driver.loadUrl(String(input.url ?? ""));
+        else await driver.navigate(action as "back" | "reload" | "home");
         await waitForContent();
-        const s = portals.state();
-        return s.tabs.find((t) => t.id === s.active);
+        const s = driver.state();
+        return s.tabs.find((t) => t.id === s.active) ?? (await evaluate(LOGIN_PROBE_JS));
       },
     },
     {
       label: "نقر في البوابة",
       tool: {
         name: "portal_click",
-        description: "ينقر على عنصر في الصفحة النشطة بنصه الظاهر أو تسميته (aria-label) — مثل موضوع رسالة، اسم ملف، «التالي»، «Inbox» — أو بمحدد CSS. ينتظر بعد النقر ليتغيّر المحتوى.",
+        description: "ينقر على عنصر في الصفحة النشطة بنصه الظاهر أو تسميته (aria-label) — مثل موضوع رسالة، اسم ملف، «التالي»، «Inbox» — أو بمحدد CSS. ينتظر بعد النقر ليتغيّر المحتوى. أزرار الإرسال/الحذف/الاعتماد تتطلب موافقة المستخدم.",
         input_schema: { type: "object", properties: { target: { type: "string" }, wait_ms: { type: "integer", minimum: 0, maximum: 10000 } }, required: ["target"], additionalProperties: false },
       },
-      approval: gui("نقر داخل البوابة"),
+      approval: (i, s) => {
+        const target = String(i.target ?? "");
+        if (SENSITIVE_RE.test(target)) return `نقر على «${target}» — إجراء حسّاس (إرسال/حذف/اعتماد) داخل البوابة`;
+        return s.confirmGui ? `نقر على «${target}» داخل البوابة` : null;
+      },
       run: async (input) => {
-        const r = await portals.evaluate<{ ok: boolean; message?: string }>(findAndAct("click", String(input.target ?? "")));
+        const r = await evaluate<{ ok: boolean; message?: string }>(findAndAct("click", String(input.target ?? "")));
         await sleep(Number(input.wait_ms ?? 1200));
         await waitForContent(50, 4000);
         return r;
@@ -217,7 +252,7 @@ export function portalTools(): ToolDef[] {
       label: "تعبئة حقل في البوابة",
       tool: {
         name: "portal_fill",
-        description: "يعبّئ حقل إدخال (أو محرر نص/مربع بحث) أو يختار من قائمة في الصفحة النشطة، بتحديد الحقل بعنوانه/placeholder/aria-label أو بمحدد CSS، مع خيار ضغط Enter. لا تستخدمه لكلمات المرور.",
+        description: "يعبّئ حقل إدخال (أو محرر نص/مربع بحث/نص رسالة) أو يختار من قائمة في الصفحة النشطة، بتحديد الحقل بعنوانه/placeholder/aria-label أو بمحدد CSS، مع خيار ضغط Enter. لا تستخدمه لكلمات المرور.",
         input_schema: {
           type: "object",
           properties: { target: { type: "string" }, value: { type: "string" }, press_enter: { type: "boolean" } },
@@ -227,9 +262,9 @@ export function portalTools(): ToolDef[] {
       },
       approval: gui("تعبئة حقل داخل البوابة"),
       run: async (input) => {
-        const r = await portals.evaluate<{ ok: boolean; message?: string }>(findAndAct("fill", String(input.target ?? ""), String(input.value ?? "")));
+        const r = await evaluate<{ ok: boolean; message?: string }>(findAndAct("fill", String(input.target ?? ""), String(input.value ?? "")));
         if (r.ok && input.press_enter) {
-          await portals.evaluate(PRESS_ENTER_JS);
+          await evaluate(PRESS_ENTER_JS);
           await sleep(1200);
           await waitForContent(50, 5000);
         }
@@ -258,9 +293,9 @@ export function portalTools(): ToolDef[] {
           if ("${dir}" === "top") el.scrollTop = 0; else if ("${dir}" === "bottom") el.scrollTop = el.scrollHeight; else el.scrollTop += ("${dir}" === "up" ? -1 : 1) * h * 0.85;
           return { scrolled: el.tagName + (el.id ? "#" + el.id : ""), top: el.scrollTop, height: el.scrollHeight };
         })()`;
-        const r = await portals.evaluate<Record<string, unknown>>(js);
+        const r = await evaluate<Record<string, unknown>>(js);
         await sleep(900);
-        const len = await portals.evaluate<number>(`(document.body.innerText || "").length`);
+        const len = await evaluate<number>(`(document.body.innerText || "").length`);
         return { ...r, textLength: len };
       },
     },
@@ -272,14 +307,13 @@ export function portalTools(): ToolDef[] {
         input_schema: { type: "object", properties: {}, additionalProperties: false },
       },
       run: async () => {
-        const shot = await portals.capture();
-        const b64 = shot.png.toString("base64");
+        const shot = await withTimeout(driver.capture(), 20_000, "لقطة البوابة");
         return {
           __blocks: [
-            { type: "image", source: { type: "base64", media_type: "image/png", data: b64 } },
+            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: shot.jpeg } },
             { type: "text", text: `لقطة البوابة ${shot.width}×${shot.height}` },
           ],
-          __preview: `data:image/png;base64,${b64}`,
+          __preview: `data:image/jpeg;base64,${shot.jpeg}`,
         };
       },
       preview: (_i, out) => (out as { __preview?: string })?.__preview ?? null,

@@ -57,7 +57,6 @@
   "exclude": [
     "electron/services/computer.ts",
     "electron/services/portals.ts",
-    "electron/services/portal-tools.ts",
     "electron/ipc/portals.ts"
   ]
 }

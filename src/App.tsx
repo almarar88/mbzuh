@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./lib/api";
 import { useUi } from "./components/ui";
 import { Icon, type IconName } from "./components/icons";
-import type { SearchHit, TaskStats } from "@shared/types";
+import type { SearchHit, Task, TaskStats } from "@shared/types";
+import type { PortalConfig } from "@shared/portals";
 import { WEEKDAY_NAMES } from "@shared/text";
 import { isMobileRuntime } from "./platform/runtime";
 import DashboardPage from "./pages/Dashboard";
@@ -112,6 +113,8 @@ export default function App() {
   const [orgName, setOrgName] = useState("جامعة محمد بن زايد للعلوم الإنسانية");
   const [conflictCount, setConflictCount] = useState(0);
   const [taskStats, setTaskStats] = useState<TaskStats | null>(null);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [portalList, setPortalList] = useState<PortalConfig[]>([]);
   const [coursesOpen, setCoursesOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -141,6 +144,7 @@ export default function App() {
       if (settings.courses_open === "1") setCoursesOpen(true);
       setConflictCount(conflicts.filter((c) => c.severity === "error").length);
       setTaskStats(tasks.stats);
+      setAllTasks(tasks.tasks);
     } catch {
       /* أول تشغيل قد يسبق تهيئة القاعدة */
     }
@@ -151,6 +155,15 @@ export default function App() {
     const timer = window.setInterval(() => void refreshChrome(), 30_000);
     return () => window.clearInterval(timer);
   }, [refreshChrome, nav.page]);
+
+  useEffect(() => {
+    void api.portal.state().then((s) => setPortalList(s.portals)).catch(() => undefined);
+    const offRoutine = window.dynamo.on("app:routine", (r) => {
+      const info = r as { name: string; ok: boolean; summary?: string };
+      toast(info.ok ? `اكتمل الروتين «${info.name}»${info.summary ? `: ${info.summary.slice(0, 90)}…` : ""}` : `تعذّر تنفيذ الروتين «${info.name}»`, info.ok ? "ok" : "danger");
+    });
+    return offRoutine;
+  }, [toast]);
 
   useEffect(() => {
     const offNav = window.dynamo.on("app:navigate", (page) => go(page as PageId));
@@ -213,6 +226,15 @@ export default function App() {
     }, 140);
     return () => window.clearTimeout(t);
   }, [query, paletteOpen]);
+
+  const localHits = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return { tasks: [] as Task[], portals: [] as PortalConfig[] };
+    return {
+      tasks: allTasks.filter((t) => t.status !== "done" && `${t.title} ${t.description ?? ""} ${t.tags ?? ""}`.toLowerCase().includes(q)).slice(0, 5),
+      portals: portalList.filter((p) => `${p.name} ${p.id} ${p.hint ?? ""} ${p.url}`.toLowerCase().includes(q)).slice(0, 4),
+    };
+  }, [query, allTasks, portalList]);
 
   const toggleTheme = async () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -440,6 +462,20 @@ export default function App() {
                   {QUICK_ACTIONS.map((a) => (
                     <button key={a.page} className="chip" onClick={() => go(a.page)}>
                       <Icon name={a.icon} size={14} /> {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {query && (localHits.portals.length > 0 || localHits.tasks.length > 0) && (
+                <div className="px-3 pb-2 flex flex-wrap gap-1.5">
+                  {localHits.portals.map((p) => (
+                    <button key={p.id} className="chip" onClick={() => go("portals", undefined, p.id)}>
+                      <Icon name="globe" size={13} /> {p.name}
+                    </button>
+                  ))}
+                  {localHits.tasks.map((t) => (
+                    <button key={t.id} className="chip" onClick={() => go("tasks")} title={t.description ?? ""}>
+                      <Icon name="tasks" size={13} /> {t.title}
                     </button>
                   ))}
                 </div>

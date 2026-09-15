@@ -1,6 +1,6 @@
 /** نقطة انطلاق «منصّة الإداري» — تطبيق سطح مكتب لجامعة محمد بن زايد للعلوم الإنسانية. */
 import path from "node:path";
-import { BrowserWindow, Menu, app, ipcMain, shell, dialog, nativeImage } from "electron";
+import { BrowserWindow, Menu, Notification, app, ipcMain, shell, dialog, nativeImage } from "electron";
 import { autoBackup, closeDb, getDb, getSetting, setSetting } from "./db";
 import { isEmptyDatabase, seedDemoData } from "./db/seed";
 import { registerCatalogIpc } from "./ipc/catalog";
@@ -9,7 +9,7 @@ import { registerAcademicsIpc } from "./ipc/academics";
 import { registerWorkspaceIpc } from "./ipc/workspace";
 import { registerAssistantIpc } from "./ipc/assistant";
 import { registerPortalsIpc } from "./ipc/portals";
-import { registerExtraTools } from "./services/ai";
+import { registerExtraTools, startRoutineScheduler } from "./services/ai";
 import { computerTools } from "./services/computer";
 import { portalTools } from "./services/portal-tools";
 import { portals } from "./services/portals";
@@ -167,12 +167,19 @@ if (!app.requestSingleInstanceLock()) {
     registerLogisticsIpc(ipcMain);
     registerAcademicsIpc(ipcMain);
     registerWorkspaceIpc(ipcMain);
-    registerExtraTools((settings) => [...portalTools(), ...(settings.computerControl ? computerTools() : [])]);
+    registerExtraTools((settings) => [...portalTools(portals), ...(settings.computerControl ? computerTools() : [])]);
     registerAssistantIpc(ipcMain, () => mainWindow);
     registerPortalsIpc(ipcMain);
 
     buildMenu();
     createWindow();
+    startRoutineScheduler(
+      (event) => send("app:ai", event),
+      (routine) => {
+        send("app:routine", routine);
+        if (Notification.isSupported()) new Notification({ title: `اكتمل الروتين: ${routine.name}`, body: routine.ok ? (routine.summary ?? "") : "تعذّر تنفيذ الروتين — راجع المساعد." }).show();
+      },
+    );
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -181,6 +188,18 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
+  });
+
+  // شهادات غير موثوقة في البوابات (شهادة داخلية للجامعة مثلًا): تُرفض افتراضيًا وتُعرض
+  // للمستخدم مع خيار الوثوق بها صراحةً (المضيف + البصمة) من صفحة البوابات.
+  app.on("certificate-error", (event, wc, url, error, certificate, callback) => {
+    const trusted = portals.onCertificateError(wc, url, error, certificate);
+    if (trusted) {
+      event.preventDefault();
+      callback(true);
+    } else {
+      callback(false);
+    }
   });
 
   // النسخة اليومية تُؤخذ عند بدء التشغيل؛ عند الخروج نغلق القاعدة فقط
