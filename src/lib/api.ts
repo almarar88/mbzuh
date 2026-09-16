@@ -1,6 +1,8 @@
 /** غلاف مُنمَّط حول جسر IPC المكشوف من العملية الرئيسية. */
 import type {
   AcademicReport,
+  AgendaItem,
+  AiAttachment,
   AiBrief,
   AiChatContext,
   AiMemoryFact,
@@ -21,6 +23,7 @@ import type {
   MinuteFile,
   Partner,
   PartnerDoc,
+  HealthReport,
   ReportOptions,
   Room,
   SearchHit,
@@ -29,6 +32,7 @@ import type {
   TaskStats,
   TaskStatus,
   Trainer,
+  UpdateInfo,
 } from "@shared/types";
 import type { PortalConfig, PortalCredential, PortalsState } from "@shared/portals";
 
@@ -259,6 +263,18 @@ export const api = {
     reorder: (status: TaskStatus, ids: number[]) => call<boolean>("tasks:reorder", status, ids),
     remove: (id: number) => call<boolean>("tasks:delete", id),
     bulkCreate: (rows: (Partial<Task> & { title: string })[]) => call<Task[]>("tasks:bulkCreate", rows),
+    exportXlsx: () => call<string | null>("tasks:export"),
+  },
+  agenda: {
+    day: (date?: string) => call<AgendaItem[]>("agenda:day", date),
+  },
+  system: {
+    update: () => call<UpdateInfo>("system:update"),
+    health: () => call<HealthReport>("system:health"),
+    log: () => call<string>("system:log"),
+    logClear: () => call<boolean>("system:logClear"),
+    logWrite: (level: "info" | "warn" | "error", source: string, message: string) => call<boolean>("system:logWrite", level, source, message),
+    openLogs: () => call<boolean>("system:openLogs"),
   },
   ai: {
     settings: () => call<AiSettings>("ai:settings"),
@@ -276,7 +292,9 @@ export const api = {
     approve: (requestId: string, ok: boolean) => call<boolean>("ai:approve", requestId, ok),
     test: () => call<{ ok: boolean; message: string; model: string }>("ai:test"),
     templates: () => call<Record<string, string>>("ai:templates"),
-    chat: (chatId: string, jobId: string, text: string, context?: AiChatContext) => call<string>("ai:chat", chatId, jobId, text, context),
+    chat: (chatId: string, jobId: string, text: string, context?: AiChatContext, attachments?: AiAttachment[]) =>
+      call<string>("ai:chat", chatId, jobId, text, context, attachments),
+    pickAttachments: () => call<AiAttachment[]>("ai:pickAttachments"),
     template: (jobId: string, input: AiTemplateInput) => call<string>("ai:template", jobId, input),
     cancel: (jobId: string) => call<boolean>("ai:cancel", jobId),
     extractTasks: (text: string, mode: "goal" | "text") =>

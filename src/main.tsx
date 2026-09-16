@@ -2,7 +2,20 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { UiProvider } from "./components/ui";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
+
+function installErrorLogging(): void {
+  const write = (level: "error" | "warn", source: string, message: string) => {
+    try {
+      void window.dynamo?.invoke("system:logWrite", level, source, message);
+    } catch {
+      /* تجاهل */
+    }
+  };
+  window.addEventListener("error", (e) => write("error", "window", `${e.message} @ ${e.filename}:${e.lineno}`));
+  window.addEventListener("unhandledrejection", (e) => write("error", "promise", String((e.reason as Error)?.stack ?? e.reason)));
+}
 
 async function start(): Promise<void> {
   const root = createRoot(document.getElementById("root") as HTMLElement);
@@ -25,10 +38,13 @@ async function start(): Promise<void> {
       return;
     }
   }
+  installErrorLogging();
   root.render(
     <StrictMode>
       <UiProvider>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </UiProvider>
     </StrictMode>,
   );

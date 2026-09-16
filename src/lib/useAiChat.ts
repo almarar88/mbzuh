@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import type { AiChatContext, AiChatMessage, AiStreamEvent } from "@shared/types";
+import type { AiAttachment, AiChatContext, AiChatMessage, AiStreamEvent } from "@shared/types";
 
 export const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
@@ -65,18 +65,18 @@ export function useAiChat(options: { chatId: string; context?: AiChatContext; pe
   }, [save]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, attachments?: AiAttachment[]) => {
       const clean = text.trim();
-      if (!clean || jobRef.current) return;
+      if ((!clean && !attachments?.length) || jobRef.current) return;
       const jobId = uid();
       jobRef.current = jobId;
       setJob(jobId);
       setMessages((list) => [
         ...list,
-        { id: uid(), role: "user", text: clean, at: new Date().toISOString() },
+        { id: uid(), role: "user", text: clean || "اقرأ المرفقات ولخّصها.", attachments: attachments?.map((a) => a.name), at: new Date().toISOString() },
         { id: uid(), role: "assistant", text: "", tools: [], at: new Date().toISOString() },
       ]);
-      await api.ai.chat(chatId, jobId, clean, contextRef.current);
+      await api.ai.chat(chatId, jobId, clean, contextRef.current, attachments);
     },
     [chatId],
   );

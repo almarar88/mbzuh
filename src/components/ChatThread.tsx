@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Button, useUi } from "./ui";
 import { Icon } from "./icons";
 import { api } from "../lib/api";
+import { Markdown } from "./Markdown";
 import type { AiChatMessage } from "@shared/types";
 
 export function ChatThread({
@@ -66,11 +67,20 @@ export function ChatThread({
               </div>
             </div>
           )}
+          {m.role === "user" && (m.attachments ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1">
+              {(m.attachments ?? []).map((a, k) => (
+                <span key={k} className="badge badge-info" style={{ fontSize: 11 }}>
+                  <Icon name="paperclip" size={11} /> {a}
+                </span>
+              ))}
+            </div>
+          )}
           <div
             className={`bubble ${m.role === "user" ? "bubble-user" : "bubble-assistant"} ${m.role === "assistant" && running && i === messages.length - 1 && !m.error ? "cursor-blink" : ""}`}
             style={compact ? { maxWidth: "96%", padding: "9px 12px", fontSize: 13.5 } : undefined}
           >
-            {m.text}
+            {m.role === "assistant" && !(running && i === messages.length - 1) ? <Markdown text={m.text} /> : m.text}
             {m.error && (
               <div className="text-sm mt-1" style={{ color: "var(--danger)" }}>
                 {m.error}

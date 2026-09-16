@@ -1,7 +1,7 @@
 {
   "name": "mbzuh-admin",
   "productName": "MBZUH Admin",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "منصّة الإداري — جامعة محمد بن زايد للعلوم الإنسانية · تطبيق ويندوز بأدوات ذكاء اصطناعي ولوحة UMS مدمجة · تطوير Alcode",
   "author": {
     "name": "Alcode",
@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.11",

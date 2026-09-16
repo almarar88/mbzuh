@@ -30,7 +30,8 @@ import {
 } from "../services/ai";
 import { createTask, deleteTask, listTasks, reorderTasks, taskStats, updateTask } from "../services/tasks";
 import { setSetting } from "../db";
-import type { AiChatContext, AiRoutine, AiStreamEvent, AiTemplateInput, Task, TaskStatus } from "../../shared/types";
+import type { AiAttachment, AiChatContext, AiRoutine, AiStreamEvent, AiTemplateInput, Task, TaskStatus } from "../../shared/types";
+import { MAX_ATTACHMENT_BYTES } from "../services/attachments";
 
 export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserWindow | null): void {
   const emit = (event: AiStreamEvent) => {
@@ -72,9 +73,27 @@ export function registerAssistantIpc(ipcMain: IpcMain, getWindow: () => BrowserW
   ipcMain.handle("ai:test", () => testConnection());
   ipcMain.handle("ai:templates", () => TEMPLATE_LABELS);
 
-  ipcMain.handle("ai:chat", (_e, chatId: string, jobId: string, text: string, context?: AiChatContext) => {
-    void chat(chatId, jobId, text, emit, context);
+  ipcMain.handle("ai:chat", (_e, chatId: string, jobId: string, text: string, context?: AiChatContext, attachments?: AiAttachment[]) => {
+    void chat(chatId, jobId, text, emit, context, attachments?.map((a) => ({ name: a.name, data: a.data })));
     return jobId;
+  });
+  /** اختيار مرفقات من الجهاز (سطح المكتب). على الجوال تُختار من الواجهة مباشرة. */
+  ipcMain.handle("ai:pickAttachments", async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ["openFile", "multiSelections"],
+      filters: [
+        { name: "المستندات والصور", extensions: ["pdf", "docx", "xlsx", "xlsm", "pptx", "csv", "txt", "md", "json", "png", "jpg", "jpeg", "gif", "webp", "eml", "html"] },
+        { name: "كل الملفات", extensions: ["*"] },
+      ],
+    });
+    if (res.canceled) return [] as AiAttachment[];
+    const out: AiAttachment[] = [];
+    for (const p of res.filePaths.slice(0, 8)) {
+      const st = fs.statSync(p);
+      if (st.size > MAX_ATTACHMENT_BYTES) continue;
+      out.push({ name: path.basename(p), data: fs.readFileSync(p).toString("base64"), size: st.size });
+    }
+    return out;
   });
   ipcMain.handle("ai:template", (_e, jobId: string, input: AiTemplateInput) => {
     void runTemplate(jobId, input, emit);

@@ -6,6 +6,9 @@ import type { SearchHit, Task, TaskStats } from "@shared/types";
 import type { PortalConfig } from "@shared/portals";
 import { WEEKDAY_NAMES } from "@shared/text";
 import { isMobileRuntime } from "./platform/runtime";
+import { Onboarding } from "./components/Onboarding";
+import { NotificationsBell, useNotices } from "./components/Notifications";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import DashboardPage from "./pages/Dashboard";
 import PortalsPage from "./pages/Portals";
 import AssistantPage from "./pages/Assistant";
@@ -57,12 +60,16 @@ const SYSTEM: NavItem[] = [{ id: "settings", label: "الإعدادات", icon: 
 const ENTITY_PAGE: Record<SearchHit["entity"], PageId> = { trainer: "trainers", course: "courses", minute: "minutes", partner: "partners", student: "students", room: "rooms" };
 const ENTITY_LABEL: Record<SearchHit["entity"], string> = { trainer: "مدرب", course: "دورة", minute: "محضر", partner: "جهة", student: "طالب", room: "قاعة" };
 
-const QUICK_ACTIONS: { label: string; page: PageId; icon: IconName }[] = [
+const QUICK_ACTIONS: { label: string; page: PageId; icon: IconName; query?: string; cmd?: string }[] = [
   { label: "افتح البوابات", page: "portals", icon: "globe" },
   { label: "اسأل المساعد الذكي", page: "assistant", icon: "sparkles" },
-  { label: "مهامي", page: "tasks", icon: "tasks" },
+  { label: "مهمة جديدة", page: "tasks", icon: "plus", cmd: "new-task" },
+  { label: "موجز اليوم", page: "dashboard", icon: "sparkles" },
+  { label: "لخّص بريدي", page: "assistant", icon: "mail", query: "افتح Outlook ولخّص الرسائل غير المقروءة وحوّل الطلبات إلى مهام." },
+  { label: "اجتماعاتي اليوم", page: "assistant", icon: "calendar", query: "ما اجتماعاتي اليوم؟" },
   { label: "محضر جديد", page: "minutes", icon: "minutes" },
   { label: "إصدار تقرير", page: "reports", icon: "chart" },
+  { label: "نسخة احتياطية الآن", page: "settings", icon: "save", cmd: "backup" },
 ];
 
 const COURSE_PAGES = new Set<PageId>(COURSES.map((c) => c.id));
@@ -122,8 +129,10 @@ export default function App() {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [cursor, setCursor] = useState(0);
   const [newTaskSignal, setNewTaskSignal] = useState(0);
+  const [onboarding, setOnboarding] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const clock = useClock();
+  const { notices } = useNotices(taskStats, conflictCount, nav.page);
 
   const go = useCallback((page: PageId, focusId?: number, q?: string) => {
     setNav({ page, focusId, query: q });
@@ -141,6 +150,7 @@ export default function App() {
       const [settings, conflicts, tasks] = await Promise.all([api.settings.all(), api.conflicts.all(), api.tasks.list()]);
       if (settings.theme === "light" || settings.theme === "dark") setTheme(settings.theme);
       if (settings.org_name) setOrgName(settings.org_name);
+      if (settings.onboarded !== "1") setOnboarding(true);
       if (settings.courses_open === "1") setCoursesOpen(true);
       setConflictCount(conflicts.filter((c) => c.severity === "error").length);
       setTaskStats(tasks.stats);
@@ -364,9 +374,12 @@ export default function App() {
                 </div>
               )}
             </div>
-            <button className="btn btn-icon" onClick={toggleTheme} title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}>
-              <Icon name={theme === "dark" ? "sun" : "moon"} />
-            </button>
+            <div className="flex items-center gap-1">
+              <NotificationsBell notices={notices} onNavigate={go} />
+              <button className="btn btn-icon" onClick={toggleTheme} title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}>
+                <Icon name={theme === "dark" ? "sun" : "moon"} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -381,6 +394,7 @@ export default function App() {
               {clock.weekday} · {clock.greg}
             </div>
           </div>
+          <NotificationsBell notices={notices} onNavigate={go} compact />
           <button className="btn btn-icon btn-sm" onClick={() => setPaletteOpen(true)} title="بحث">
             <Icon name="search" size={16} />
           </button>
@@ -388,8 +402,12 @@ export default function App() {
             <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
           </button>
         </div>
-        {isPortals && !mobile ? page : <div className="p-4 md:p-6 max-w-[1560px] mx-auto w-full">{page}</div>}
+        <ErrorBoundary key={nav.page} onReset={() => go("dashboard")}>
+          {isPortals && !mobile ? page : <div className="p-4 md:p-6 max-w-[1560px] mx-auto w-full">{page}</div>}
+        </ErrorBoundary>
       </main>
+
+      {onboarding && <Onboarding onDone={() => setOnboarding(false)} onNavigate={(p) => go(p)} />}
 
       {/* شريط سفلي للهاتف */}
       <nav className="bottom-nav">
@@ -460,7 +478,24 @@ export default function App() {
               {!query && (
                 <div className="p-3 flex flex-wrap gap-2">
                   {QUICK_ACTIONS.map((a) => (
-                    <button key={a.page} className="chip" onClick={() => go(a.page)}>
+                    <button
+                      key={a.label}
+                      className="chip"
+                      onClick={async () => {
+                        if (a.cmd === "new-task") {
+                          go("tasks");
+                          setNewTaskSignal((n) => n + 1);
+                          return;
+                        }
+                        if (a.cmd === "backup") {
+                          setPaletteOpen(false);
+                          const info = await api.backup.create();
+                          toast(`تم إنشاء نسخة احتياطية (${Math.round(info.size / 1024)} ك.ب)`, "ok");
+                          return;
+                        }
+                        go(a.page, undefined, a.query);
+                      }}
+                    >
                       <Icon name={a.icon} size={14} /> {a.label}
                     </button>
                   ))}

@@ -8,9 +8,11 @@ import { api } from "../lib/api";
 import { Badge, Button, EmptyState, Field, Input, Modal, Select, TabBar, Textarea, Toggle, useUi } from "../components/ui";
 import { Icon } from "../components/icons";
 import { ChatThread } from "../components/ChatThread";
+import { Markdown } from "../components/Markdown";
+import { AttachmentBar, useAttachmentDrop } from "../components/AttachmentPicker";
 import { uid, useAiChat } from "../lib/useAiChat";
 import { formatDateTime } from "@shared/text";
-import type { AiRoutine, AiSettings, AiStreamEvent, AiTemplateId } from "@shared/types";
+import type { AiAttachment, AiRoutine, AiSettings, AiStreamEvent, AiTemplateId } from "@shared/types";
 import type { PageId } from "../App";
 
 const SUGGESTIONS = [
@@ -146,7 +148,9 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
   const [chats, setChats] = useState<{ id: string; title: string; updated_at: string }[]>([]);
   const [input, setInput] = useState(initialPrompt ?? "");
   const [showHistory, setShowHistory] = useState(false);
+  const [attachments, setAttachments] = useState<AiAttachment[]>([]);
   const sentInitial = useRef(false);
+  useAttachmentDrop(useCallback((list: AiAttachment[]) => setAttachments((cur) => [...cur, ...list].slice(0, 8)), []));
 
   const loadChats = useCallback(async () => setChats(await api.ai.chats()), []);
   useEffect(() => {
@@ -163,9 +167,11 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
   }, [initialPrompt]);
 
   const send = (text: string) => {
-    if (!text.trim() || chat.running) return;
+    if ((!text.trim() && attachments.length === 0) || chat.running) return;
     setInput("");
-    void chat.send(text);
+    const atts = attachments;
+    setAttachments([]);
+    void chat.send(text, atts.length ? atts : undefined);
   };
 
   const newChat = () => {
@@ -271,11 +277,14 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
         />
 
         <div className="p-3 assistant-composer" style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="mb-2">
+            <AttachmentBar items={attachments} onChange={setAttachments} disabled={running} />
+          </div>
           <div className="flex gap-2 items-end">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="اكتب طلبك… (Enter للإرسال، Shift+Enter لسطر جديد)"
+              placeholder={attachments.length ? "ماذا تريد أن أفعل بالمرفقات؟ (لخّص، استخرج المهام، ترجم…)" : "اكتب طلبك أو أرفق ملفًا… (Enter للإرسال، Shift+Enter لسطر جديد)"}
               style={{ minHeight: 54, maxHeight: 200 }}
               rows={2}
               onKeyDown={(e) => {
@@ -290,7 +299,7 @@ function ChatPane({ initialPrompt, onNavigate }: { initialPrompt?: string; onNav
                 <Icon name="stop" size={16} /> إيقاف
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => send(input)} disabled={!input.trim()} style={{ height: 54 }}>
+              <Button variant="primary" onClick={() => send(input)} disabled={!input.trim() && attachments.length === 0} style={{ height: 54 }}>
                 <Icon name="send" size={16} /> إرسال
               </Button>
             )}
@@ -436,7 +445,7 @@ function RoutinesPane({ onNavigate }: { onNavigate: Navigate }) {
             </div>
             {(runningId === r.id || (expanded === r.id && r.last_result)) && (
               <div className="mt-3 p-3 output-pane text-sm" style={{ background: "var(--panel-2)", borderRadius: 14, maxHeight: 320, overflow: "auto" }}>
-                {runningId === r.id ? <span className="cursor-blink">{live}</span> : r.last_result}
+                {runningId === r.id ? <span className="cursor-blink">{live}</span> : <Markdown text={r.last_result ?? ""} />}
               </div>
             )}
             {expanded !== r.id && r.last_result && runningId !== r.id && (
@@ -770,7 +779,7 @@ function ToolsPane({ onNavigate }: { onNavigate: Navigate }) {
             {error ? (
               <p style={{ color: "var(--danger)" }}>{error}</p>
             ) : output ? (
-              <span className={running ? "cursor-blink" : ""}>{output}</span>
+              running ? <span className="cursor-blink">{output}</span> : <Markdown text={output} />
             ) : (
               <p className="text-sm text-center py-10" style={{ color: "var(--muted)" }}>
                 {running ? "جارٍ التوليد…" : "سيظهر المخرج هنا تدريجيًا."}

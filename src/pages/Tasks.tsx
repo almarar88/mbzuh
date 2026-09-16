@@ -122,6 +122,24 @@ export default function TasksPage({ newTaskSignal, onNavigate }: { newTaskSignal
             <Button onClick={() => setAiOpen(true)}>
               <Icon name="wand" size={15} /> تفكيك هدف بالذكاء الاصطناعي
             </Button>
+            <Button
+              variant="ghost"
+              title="تقرير إنجاز الأسبوع بالذكاء الاصطناعي"
+              onClick={() => onNavigate("assistant", undefined, "اكتب تقرير إنجاز أسبوعي مهني من مهامي: اقرأ المهام كلها بـlist_tasks (status: all)، واذكر ما أُنجز خلال آخر 7 أيام، وما لا يزال قيد العمل، والمتأخر مع سبب مقترح، ثم أولويات الأسبوع القادم. صيغة مناسبة لإرسالها للمدير.")}
+            >
+              <Icon name="chart" size={15} /> تقرير الأسبوع
+            </Button>
+            <Button
+              variant="ghost"
+              className="btn-icon"
+              title="تصدير المهام إلى Excel"
+              onClick={async () => {
+                const p = await api.tasks.exportXlsx();
+                if (p) toast("تم تصدير المهام", "ok");
+              }}
+            >
+              <Icon name="download" size={15} />
+            </Button>
             <Button variant="primary" onClick={() => setDraft(emptyDraft())}>
               <Icon name="plus" size={15} /> مهمة جديدة
             </Button>

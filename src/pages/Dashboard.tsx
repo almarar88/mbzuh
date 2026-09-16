@@ -4,9 +4,10 @@ import { Badge, Button, EmptyState, Panel, useUi } from "../components/ui";
 import { Icon, type IconName } from "../components/icons";
 import { BarList, SegmentedBar } from "../components/Charts";
 import { uid } from "../lib/useAiChat";
+import { Markdown } from "../components/Markdown";
 import { formatDate, formatDateTime, todayISO } from "@shared/text";
 import { PORTAL_COLORS, type PortalsState } from "@shared/portals";
-import type { AiBrief, AiRoutine, AiStreamEvent, Conflict, DashboardStats, Task, TaskStats } from "@shared/types";
+import type { AgendaItem, AiBrief, AiRoutine, AiStreamEvent, Conflict, DashboardStats, Task, TaskStats } from "@shared/types";
 import type { PageId } from "../App";
 
 /** «موجز اليوم»: يجمعه المساعد من البريد والتقويم والمهام ويُحفظ لليوم. */
@@ -71,7 +72,7 @@ function BriefCard({ hasKey, onNavigate }: { hasKey: boolean; onNavigate: (page:
       </div>
       {open && text && (
         <div className="output-pane text-sm mt-3 p-3" style={{ background: "var(--panel-2)", borderRadius: 16, maxHeight: 360, overflow: "auto" }}>
-          <span className={running ? "cursor-blink" : ""}>{text}</span>
+          {running ? <span className="cursor-blink">{text}</span> : <Markdown text={text} />}
           {!running && (
             <div className="mt-3 flex gap-2 flex-wrap">
               <Button size="sm" onClick={() => onNavigate("assistant", undefined, "بناءً على موجز اليوم، رتّب لي خطة عمل لليوم بالساعات وابدأ بتنفيذ ما يمكن تنفيذه.")}>
@@ -135,10 +136,11 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
   const [showCourses, setShowCourses] = useState(false);
   const [hasKey, setHasKey] = useState(false);
   const [routines, setRoutines] = useState<AiRoutine[]>([]);
+  const [agenda, setAgenda] = useState<AgendaItem[]>([]);
 
   useEffect(() => {
     void (async () => {
-      const [s, c, a, t, ai, p, settings, r] = await Promise.all([
+      const [s, c, a, t, ai, p, settings, r, ag] = await Promise.all([
         api.dashboard.stats(),
         api.conflicts.all(),
         api.dashboard.activity(),
@@ -147,7 +149,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
         api.portal.state(),
         api.settings.all(),
         api.ai.routines(),
+        api.agenda.day(),
       ]);
+      setAgenda(ag);
       setStats(s);
       setConflicts(c);
       setActivity(a);
@@ -338,6 +342,42 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: PageI
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel className="h-full">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-extrabold text-[15px] flex items-center gap-2">
+              <Icon name="calendar" size={15} style={{ color: "var(--c-blue)" }} /> أجندة اليوم
+            </h3>
+            <Button size="sm" variant="ghost" onClick={() => onNavigate("assistant", undefined, "اعرض أجندة اليوم كاملة (المهام والحصص والحجوزات والاجتماعات من التقويم) ورتّب لي اليوم بالساعات.")}>
+              رتّب يومي <Icon name="sparkles" size={13} />
+            </Button>
+          </div>
+          {agenda.filter((a) => a.kind !== "task").length === 0 ? (
+            <EmptyState title="لا حصص أو حجوزات اليوم" hint="اجتماعات Teams وOutlook يجلبها المساعد في «موجز اليوم»" />
+          ) : (
+            <ul className="space-y-2">
+              {agenda
+                .filter((a) => a.kind !== "task")
+                .slice(0, 7)
+                .map((a) => (
+                  <li key={`${a.kind}-${a.id}`} className="flex items-center gap-2 text-sm">
+                    <span className="text-xs tabular-nums shrink-0" dir="ltr" style={{ color: "var(--muted)", minWidth: 84 }}>
+                      {a.time}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate" style={{ color: "var(--ink-2)" }}>
+                        {a.title}
+                      </span>
+                      <span className="block text-[11px] truncate" style={{ color: "var(--muted)" }}>
+                        {a.subtitle}
+                      </span>
+                    </span>
+                    <Badge tone={a.kind === "session" ? "info" : "default"}>{a.kind === "session" ? "حصة" : "حجز"}</Badge>
+                  </li>
+                ))}
             </ul>
           )}
         </Panel>

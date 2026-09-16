@@ -16,6 +16,8 @@ import { getDb, getSetting, logActivity, setSetting } from "../db";
 import { dashboardStats, globalSearch } from "./stats";
 import { detectAllConflicts } from "./conflicts";
 import { createTask, getTask, listTasks, taskStats, updateTask } from "./tasks";
+import { agendaFor } from "./agenda";
+import { attachmentBlocks, type AttachmentInput } from "./attachments";
 import { todayISO, WEEKDAY_NAMES } from "../../shared/text";
 import { LANGUAGE_LABELS, LEVEL_LABELS } from "../../shared/labels";
 import type {
@@ -426,6 +428,15 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    label: "أجندة اليوم",
+    tool: {
+      name: "get_agenda",
+      description: "يعيد أجندة يوم محدد من بيانات التطبيق: المهام المستحقة والمتأخرة، حصص الدورات، وحجوزات القاعات (بالأوقات). افتراضيًا اليوم.",
+      input_schema: { type: "object", properties: { date: { type: "string", description: "YYYY-MM-DD" } }, additionalProperties: false },
+    },
+    run: (input) => agendaFor(typeof input.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : undefined),
+  },
+  {
     label: "قراءة محاضر الاجتماعات",
     tool: {
       name: "list_meeting_minutes",
@@ -541,9 +552,18 @@ function pruneImages(history: Anthropic.MessageParam[], keep = 2): void {
   }
 }
 
+/** نسخة للحفظ: بلا صور ولا مستندات مرفقة (تبقى في الذاكرة أثناء الجلسة فقط). */
 function stripImages(history: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
   const copy = JSON.parse(JSON.stringify(history)) as Anthropic.MessageParam[];
   pruneImages(copy, 0);
+  for (const msg of copy) {
+    if (msg.role !== "user" || !Array.isArray(msg.content)) continue;
+    const blocks = msg.content as (Block & { title?: string })[];
+    for (let k = 0; k < blocks.length; k++) {
+      if (blocks[k].type === "image") blocks[k] = { type: "text", text: "[صورة مرفقة حُذفت من السجل]" } as Block;
+      if (blocks[k].type === "document") blocks[k] = { type: "text", text: `[مرفق حُذف من السجل: ${blocks[k].title ?? ""}]` } as Block;
+    }
+  }
   return copy;
 }
 
@@ -600,23 +620,39 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
  * يرسل رسالة في محادثة ويبثّ الرد تدريجيًا. حلقة يدوية: نص → أدوات → نص… حتى ينتهي الدور.
  * يعيد النص الكامل للرد (أو null عند الخطأ).
  */
-export async function chat(chatId: string, jobId: string, userText: string, emit: Emit, context?: AiChatContext): Promise<string | null> {
+export async function chat(chatId: string, jobId: string, userText: string, emit: Emit, context?: AiChatContext, attachments?: AttachmentInput[]): Promise<string | null> {
   const settings = getAiSettings();
   const controller = new AbortController();
   jobs.set(jobId, controller);
   const history = loadHistory(chatId);
   const isFirst = history.length === 0;
-  history.push({ role: "user", content: userText });
 
   let client: Anthropic;
   try {
     client = getClient();
   } catch (error) {
-    history.pop();
     emit({ jobId, type: "error", message: friendlyError(error) });
     jobs.delete(jobId);
     return null;
   }
+
+  // المرفقات تُحوَّل إلى كتل (PDF/صور كما هي، Word/Excel/PowerPoint نصًا)
+  let userContent: string | Anthropic.ContentBlockParam[] = userText;
+  if (attachments && attachments.length) {
+    const blocks: Anthropic.ContentBlockParam[] = [];
+    for (const a of attachments.slice(0, 8)) {
+      try {
+        blocks.push(...(await attachmentBlocks(a)));
+      } catch (error) {
+        emit({ jobId, type: "error", message: friendlyError(error) });
+        jobs.delete(jobId);
+        return null;
+      }
+    }
+    blocks.push({ type: "text", text: userText || "اقرأ المرفقات ولخّصها." });
+    userContent = blocks;
+  }
+  history.push({ role: "user", content: userContent });
 
   const localTools: ToolDef[] = [...TOOLS, ...(extraToolsProvider ? extraToolsProvider(settings) : [])];
   const toolByName = new Map(localTools.map((t) => [t.tool.name, t]));

@@ -9,6 +9,8 @@ import { registerAcademicsIpc } from "./ipc/academics";
 import { registerWorkspaceIpc } from "./ipc/workspace";
 import { registerAssistantIpc } from "./ipc/assistant";
 import { registerPortalsIpc } from "./ipc/portals";
+import { registerSystemIpc } from "./ipc/system";
+import { logLine } from "./services/log";
 import { registerExtraTools, startRoutineScheduler } from "./services/ai";
 import { computerTools } from "./services/computer";
 import { portalTools } from "./services/portal-tools";
@@ -137,10 +139,17 @@ function createWindow(): void {
 
   portals.attach(mainWindow);
 
+  mainWindow.webContents.on("render-process-gone", (_e, d) => logLine("error", "renderer", `render process gone: ${d.reason}`));
+  mainWindow.webContents.on("unresponsive", () => logLine("warn", "renderer", "unresponsive"));
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
+
+// أعطال غير متوقعة: تُسجَّل ولا تُسقط التطبيق.
+process.on("uncaughtException", (e) => logLine("error", "main", `${e?.stack ?? e}`));
+process.on("unhandledRejection", (e) => logLine("error", "main:promise", `${(e as Error)?.stack ?? e}`));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -170,6 +179,8 @@ if (!app.requestSingleInstanceLock()) {
     registerExtraTools((settings) => [...portalTools(portals), ...(settings.computerControl ? computerTools() : [])]);
     registerAssistantIpc(ipcMain, () => mainWindow);
     registerPortalsIpc(ipcMain);
+    registerSystemIpc(ipcMain);
+    logLine("info", "app", `بدء التشغيل ${app.getVersion()} على ${process.platform}`);
 
     buildMenu();
     createWindow();

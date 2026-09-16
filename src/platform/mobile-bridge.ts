@@ -10,6 +10,7 @@ import { registerLogisticsIpc } from "../../electron/ipc/logistics";
 import { registerAcademicsIpc } from "../../electron/ipc/academics";
 import { registerWorkspaceIpc } from "../../electron/ipc/workspace";
 import { registerAssistantIpc } from "../../electron/ipc/assistant";
+import { registerSystemIpc } from "../../electron/ipc/system";
 import { registerExtraTools } from "../../electron/services/ai";
 import { portalTools } from "../../electron/services/portal-tools";
 import { createMobilePortalDriver } from "./portal-driver-mobile";
@@ -188,6 +189,7 @@ export async function bootMobile(): Promise<void> {
   registerAcademicsIpc(fakeIpc as never);
   registerWorkspaceIpc(fakeIpc as never);
   registerAssistantIpc(fakeIpc as never, () => fakeWindow as never);
+  registerSystemIpc(fakeIpc as never);
   registerMobilePortals();
 
   window.dynamo = {

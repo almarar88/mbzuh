@@ -387,6 +387,34 @@ export interface AiRoutine {
   created_at: string;
 }
 
+export interface AgendaItem {
+  kind: "task" | "session" | "booking";
+  id: number;
+  title: string;
+  time: string | null;
+  subtitle: string;
+  tone: "default" | "info" | "warn" | "danger";
+}
+
+export interface AiAttachment {
+  name: string;
+  /** base64 */
+  data: string;
+  size: number;
+}
+
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  available: boolean;
+  url: string;
+  notes: string;
+}
+
+export interface HealthReport {
+  checks: { id: string; label: string; ok: boolean; detail: string }[];
+}
+
 export interface AiBrief {
   day: string;
   text: string;
@@ -423,6 +451,8 @@ export interface AiChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** أسماء المرفقات التي أُرسلت مع رسالة المستخدم. */
+  attachments?: string[];
   tools?: { name: string; label: string; ok?: boolean }[];
   /** لقطات شاشة التُقطت أثناء التحكم بالكمبيوتر (data URL مصغّر). */
   shots?: { dataUrl: string; label: string }[];

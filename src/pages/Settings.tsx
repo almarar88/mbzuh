@@ -3,7 +3,8 @@ import { api, type SystemInfo } from "../lib/api";
 import { Badge, Button, EmptyState, Field, Input, Modal, PageHeader, Panel, Select, Toggle, useUi } from "../components/ui";
 import { Icon } from "../components/icons";
 import { formatDateTime } from "@shared/text";
-import { AI_MODELS, type AiEffort, type AiMemoryFact, type AiSettings } from "@shared/types";
+import { AI_MODELS, type AiEffort, type AiMemoryFact, type AiSettings, type HealthReport, type UpdateInfo } from "@shared/types";
+import { nativeOpenExternal } from "../platform/native";
 import { PORTAL_COLORS, type PortalColor, type PortalConfig, type PortalsState } from "@shared/portals";
 import { isMobileRuntime } from "../platform/runtime";
 
@@ -27,6 +28,10 @@ export default function SettingsPage({ onThemeChange, onOrgChange }: { onThemeCh
   const [credDraft, setCredDraft] = useState({ username: "", password: "", autofill: true, autoSubmit: true });
   const [memory, setMemory] = useState<AiMemoryFact[]>([]);
   const [memDraft, setMemDraft] = useState("");
+  const [health, setHealth] = useState<HealthReport | null>(null);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [logText, setLogText] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [system, settings, list, aiSettings, portalState, credSummary] = await Promise.all([
@@ -339,6 +344,96 @@ export default function SettingsPage({ onThemeChange, onOrgChange }: { onThemeCh
               حفظ
             </Button>
           </div>
+        </Panel>
+
+        <Panel>
+          <h3 className="font-extrabold text-[15px] mb-1 flex items-center gap-2">
+            <Icon name="activity" size={16} style={{ color: "var(--ok)" }} /> صحة النظام والتحديثات
+          </h3>
+          <p className="text-xs mb-3" style={{ color: "var(--muted)" }}>
+            فحص سريع يكشف ما قد يمنع التطبيق من العمل بكامل قدراته، والتحقق من وجود إصدار أحدث.
+          </p>
+          <div className="flex gap-2 flex-wrap mb-3">
+            <Button variant="primary" size="sm" onClick={async () => setHealth(await api.system.health())}>
+              <Icon name="check" size={13} /> فحص الآن
+            </Button>
+            <Button
+              size="sm"
+              disabled={checking}
+              onClick={async () => {
+                setChecking(true);
+                setUpdate(await api.system.update());
+                setChecking(false);
+              }}
+            >
+              <Icon name="download" size={13} /> {checking ? "جارٍ التحقق…" : "التحقق من التحديثات"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => setLogText(logText === null ? (await api.system.log()) || "السجل فارغ." : null)}
+            >
+              <Icon name="file" size={13} /> {logText === null ? "عرض سجل التشخيص" : "إخفاء السجل"}
+            </Button>
+          </div>
+          {update && (
+            <div className={`badge ${update.available ? "badge-info" : "badge-ok"} mb-3`} style={{ whiteSpace: "normal" }}>
+              {update.available ? (
+                <>
+                  يتوفر الإصدار {update.latest} (الحالي {update.current}) —{" "}
+                  <button className="link" onClick={() => nativeOpenExternal(update.url)}>
+                    صفحة التنزيل
+                  </button>
+                </>
+              ) : update.latest ? (
+                `لديك أحدث إصدار (${update.current})`
+              ) : (
+                "تعذّر الاتصال بخادم التحديثات"
+              )}
+            </div>
+          )}
+          {health && (
+            <ul className="space-y-1.5">
+              {health.checks.map((c) => (
+                <li key={c.id} className="flex items-start gap-2 text-sm">
+                  <span style={{ color: c.ok ? "var(--ok)" : "var(--warn)" }}>{c.ok ? "✓" : "!"}</span>
+                  <span className="min-w-0">
+                    <span className="font-semibold">{c.label}</span>
+                    <span className="mx-1" style={{ color: "var(--muted)" }}>
+                      — {c.detail}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {logText !== null && (
+            <div className="mt-3">
+              <pre className="text-[11px] whitespace-pre-wrap p-2 scroll-y" dir="ltr" style={{ background: "var(--panel-2)", borderRadius: 12, maxHeight: 220, color: "var(--muted)" }}>
+                {logText}
+              </pre>
+              <div className="flex gap-2 mt-2">
+                {!mobile && (
+                  <Button size="sm" variant="ghost" onClick={() => void api.system.openLogs()}>
+                    فتح مجلد السجلات
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(logText).then(() => toast("نُسخ السجل", "ok"))}>
+                  نسخ
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    await api.system.logClear();
+                    setLogText("");
+                  }}
+                >
+                  مسح
+                </Button>
+              </div>
+            </div>
+          )}
         </Panel>
 
         <Panel>

@@ -257,6 +257,39 @@ export const Icons = {
       <path d="M3 13l9 5 9-5M3 17l9 5 9-5" />
     </svg>
   ),
+  paperclip: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M21 11.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.5 1.5 0 0 1-2.1-2.1l8-8" />
+    </svg>
+  ),
+  file: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M9 13h6M9 17h6" />
+    </svg>
+  ),
+  download: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M12 4v12M6 11l6 6 6-6M4 20h16" />
+    </svg>
+  ),
+  alert: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M12 3l10 18H2z" />
+      <path d="M12 10v5M12 18h.01" />
+    </svg>
+  ),
+  help: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01" />
+    </svg>
+  ),
+  activity: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M3 12h4l3-8 4 16 3-8h4" />
+    </svg>
+  ),
 };
 
 export type IconName = keyof typeof Icons;
