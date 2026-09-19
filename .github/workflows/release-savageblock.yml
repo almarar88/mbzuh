@@ -93,6 +93,16 @@ jobs:
           cp app/build/outputs/mapping/release/mapping.txt "dist/SavageBlock-${{ steps.ver.outputs.version }}-mapping.txt"
           ls -la dist
 
+      - name: بناء حزمة Google Play (AAB) الموقّعة
+        run: |
+          ./gradlew :app:bundleRelease --no-daemon \
+            -PsbKeystore="$PWD/release.jks" \
+            -PsbStorePass="$SB_STORE_PASS" \
+            -PsbKeyAlias="$SB_KEY_ALIAS" \
+            -PsbKeyPass="$SB_KEY_PASS"
+          cp app/build/outputs/bundle/release/app-release.aab "dist/SavageBlock-${{ steps.ver.outputs.version }}.aab"
+          ls -la dist
+
       - name: التحقق من التوقيع
         run: |
           "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" \
@@ -119,6 +129,11 @@ jobs:
             تطبيق أندرويد (8.0 فأحدث) يراقب وقتك على تطبيقات التضييع ويغطي الشاشة
             بتهزيء عدواني عند تجاوز الحد. يدعم الأجهزة القابلة للطي (Galaxy Z Fold وأمثاله)
             بتخطيط ثنائي الأعمدة عند فتح الشاشة.
+
+            ### الملفات
+            - `SavageBlock-${{ steps.ver.outputs.version }}.apk` — للتثبيت المباشر على الجهاز.
+            - `SavageBlock-${{ steps.ver.outputs.version }}.aab` — حزمة Google Play لرفعها في Play Console.
+            - `*-mapping.txt` — ملف R8 لفك تشفير تقارير الأعطال (ارفعه مع الـ AAB).
 
             ### التثبيت
             1. نزّل `SavageBlock-${{ steps.ver.outputs.version }}.apk` وافتحه.

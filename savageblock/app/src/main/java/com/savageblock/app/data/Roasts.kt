@@ -116,6 +116,10 @@ fun Long.toArabicDigits(): String = toString().map { c ->
     if (c in '0'..'9') '٠' + (c - '0') else c
 }.joinToString("")
 
+fun String.toArabicDigitsStr(): String = map { c ->
+    if (c in '0'..'9') '٠' + (c - '0') else c
+}.joinToString("")
+
 /** Hall of Shame copy: translates wasted minutes into what the user could have done instead. */
 object Shame {
     data class Equivalent(val label: String, val value: String)

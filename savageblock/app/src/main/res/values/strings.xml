@@ -5,4 +5,7 @@
     <string name="notification_channel_description">إشعار دائم يشير إلى أن SavageBlock يراقب التطبيقات المحددة.</string>
     <string name="notification_title">SavageBlock يراقبك</string>
     <string name="notification_stop">إيقاف المراقبة</string>
+    <string name="alert_channel_name">تنبيهات الحد</string>
+    <string name="alert_channel_description">تنبيه قبل الوصول إلى الحد اليومي لتطبيق محظور.</string>
+    <string name="privacy_policy_url">https://github.com/almarar88/mbzuh/blob/main/savageblock/PRIVACY_POLICY.md</string>
 </resources>

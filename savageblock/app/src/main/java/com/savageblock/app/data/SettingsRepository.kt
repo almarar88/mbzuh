@@ -23,10 +23,10 @@ import kotlinx.serialization.json.Json
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "savageblock")
 
 /**
- * Single source of truth for user settings and the daily usage ledger.
+ * Single source of truth for user settings, today's ledger and the archived history.
  *
- * Settings are persisted as JSON in Preferences DataStore. Daily stats are kept hot in a
- * [StateFlow] (updated once per second by the monitor service) and flushed to disk periodically.
+ * Settings and history are persisted as JSON in Preferences DataStore. Today's stats are kept hot
+ * in a [StateFlow] (updated once per second by the monitor service) and flushed periodically.
  */
 class SettingsRepository(private val context: Context) {
 
@@ -35,19 +35,21 @@ class SettingsRepository(private val context: Context) {
 
     private val settingsKey = stringPreferencesKey("settings_json")
     private val statsKey = stringPreferencesKey("stats_json")
+    private val historyKey = stringPreferencesKey("history_json")
 
-    val settings: Flow<Settings> = context.dataStore.data.map { prefs ->
-        prefs[settingsKey]?.let { runCatching { json.decodeFromString<Settings>(it) }.getOrNull() } ?: Settings()
-    }
+    val settings: Flow<Settings> = context.dataStore.data.map { prefs -> prefs.settings() }
+
+    val history: Flow<History> = context.dataStore.data.map { prefs -> prefs.history() }
 
     private val _liveStats = MutableStateFlow(DailyStats())
     val liveStats: StateFlow<DailyStats> = _liveStats.asStateFlow()
 
     init {
         scope.launch {
-            val stored = context.dataStore.data.first()[statsKey]
-                ?.let { runCatching { json.decodeFromString<DailyStats>(it) }.getOrNull() }
-            if (stored != null && stored.date == todayKey()) {
+            val prefs = context.dataStore.data.first()
+            val stored = prefs[statsKey]?.let { runCatching { json.decodeFromString<DailyStats>(it) }.getOrNull() }
+                ?: return@launch
+            if (stored.date == todayKey()) {
                 _liveStats.update { live ->
                     // Merge so a fast-starting service never loses ticks recorded before the load.
                     val merged = (stored.seconds.keys + live.seconds.keys).associateWith { pkg ->
@@ -55,17 +57,24 @@ class SettingsRepository(private val context: Context) {
                     }
                     DailyStats(stored.date, merged, maxOf(stored.blocks, live.blocks))
                 }
+            } else {
+                // The app was closed over midnight: archive the stale day before it is lost.
+                archive(stored, prefs.settings())
             }
         }
     }
+
+    private fun Preferences.settings(): Settings =
+        this[settingsKey]?.let { runCatching { json.decodeFromString<Settings>(it) }.getOrNull() } ?: Settings()
+
+    private fun Preferences.history(): History =
+        this[historyKey]?.let { runCatching { json.decodeFromString<History>(it) }.getOrNull() } ?: History()
 
     suspend fun currentSettings(): Settings = settings.first()
 
     suspend fun updateSettings(transform: (Settings) -> Settings) {
         context.dataStore.edit { prefs ->
-            val current = prefs[settingsKey]
-                ?.let { runCatching { json.decodeFromString<Settings>(it) }.getOrNull() } ?: Settings()
-            prefs[settingsKey] = json.encodeToString(Settings.serializer(), transform(current))
+            prefs[settingsKey] = json.encodeToString(Settings.serializer(), transform(prefs.settings()))
         }
     }
 
@@ -75,10 +84,31 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** Applies an in-memory change to today's ledger; rolls the ledger over if the day changed. */
-    fun updateLiveStats(transform: (DailyStats) -> DailyStats) {
-        _liveStats.update { current ->
-            val base = if (current.date == todayKey()) current else DailyStats()
-            transform(base)
+    fun updateLiveStats(settings: Settings? = null, transform: (DailyStats) -> DailyStats) {
+        rolloverIfNeeded(settings)
+        _liveStats.update(transform)
+    }
+
+    /**
+     * If the hot ledger belongs to a previous day, freeze it into history (with the limits that
+     * applied) and start a fresh one. Safe to call every tick.
+     */
+    fun rolloverIfNeeded(settings: Settings?) {
+        val current = _liveStats.value
+        if (current.date == todayKey()) return
+        if (_liveStats.compareAndSet(current, DailyStats())) {
+            scope.launch { archive(current, settings ?: currentSettings()) }
+        }
+    }
+
+    private suspend fun archive(day: DailyStats, settings: Settings) {
+        if (day.seconds.isEmpty() && day.blocks == 0) return
+        val limits = settings.apps.associate { it.packageName to it.limitMinutes * 60L }
+        val record = DayRecord(day.date, day.seconds, day.blocks, limits)
+        context.dataStore.edit { prefs ->
+            val existing = prefs.history().days.filterNot { it.date == record.date }
+            val trimmed = (existing + record).sortedBy { it.date }.takeLast(HISTORY_DAYS)
+            prefs[historyKey] = json.encodeToString(History.serializer(), History(trimmed))
         }
     }
 
@@ -86,6 +116,15 @@ class SettingsRepository(private val context: Context) {
         val snapshot = _liveStats.value
         context.dataStore.edit { prefs ->
             prefs[statsKey] = json.encodeToString(DailyStats.serializer(), snapshot)
+        }
+    }
+
+    /** Wipes ledger + history (Settings → "امسح البيانات"). Settings are kept. */
+    suspend fun clearHistory() {
+        _liveStats.value = DailyStats()
+        context.dataStore.edit { prefs ->
+            prefs.remove(historyKey)
+            prefs.remove(statsKey)
         }
     }
 

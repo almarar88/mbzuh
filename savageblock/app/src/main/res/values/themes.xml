@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.SavageBlock" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/void_black</item>
-        <item name="android:statusBarColor">@color/void_black</item>
-        <item name="android:navigationBarColor">@color/void_black</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:colorPrimary">@color/crimson</item>
-        <item name="android:colorAccent">@color/acid</item>
-        <item name="android:textColorPrimary">@color/bone</item>
+        <item name="android:windowBackground">@color/canvas_light</item>
+        <item name="android:statusBarColor">@color/canvas_light</item>
+        <item name="android:navigationBarColor">@color/canvas_light</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <item name="android:colorPrimary">@color/blue</item>
+        <item name="android:colorAccent">@color/blue</item>
+        <item name="android:textColorPrimary">@color/ink</item>
         <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
     </style>
 </resources>

@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="void_black">#FF0A0A0A</color>
-    <color name="crimson">#FFFF2A55</color>
-    <color name="acid">#FFF5EE38</color>
-    <color name="bone">#FFFFFFFF</color>
-    <color name="ic_launcher_background">#FF0A0A0A</color>
+    <color name="canvas_light">#FFF2F4F7</color>
+    <color name="blue">#FF3D7BF6</color>
+    <color name="ink">#FF111827</color>
+    <color name="ic_launcher_background">#FF3D7BF6</color>
 </resources>
