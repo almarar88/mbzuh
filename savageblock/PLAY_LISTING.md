@@ -13,7 +13,7 @@
 | أيقونة تكيفية + monochrome | ✅ `res/mipmap-anydpi-v26` |
 | أيقونة 512×512 وصورة مميزة 1024×500 | ✅ `store/icon-512.png`، `store/feature-graphic.png` |
 | سياسة خصوصية برابط عام | ✅ `PRIVACY_POLICY.md` (رابطها في `strings.xml`) |
-| مفتاح توقيع ثابت | ⚠️ أنشئه بـ `scripts/make-keystore.sh` وأضف الأسرار (القسم 1) |
+| مفتاح توقيع ثابت | ✅ `keystore/savageblock-release.jks` (للتوزيع المباشر). لـ Play فعّل Play App Signing أو انقل المفتاح إلى الأسرار (القسم 1) |
 | حساب مطوّر Google Play (25$ مرة واحدة) | ⚠️ عليك |
 | لقطات شاشة (2–8 لكل نوع جهاز) | ⚠️ خذها من الجهاز بعد التثبيت |
 | نموذج «Foreground service» في Play Console | ⚠️ النص جاهز في القسم 4 |

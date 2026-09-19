@@ -14,8 +14,8 @@ android {
         // TYPE_APPLICATION_OVERLAY (needed for the savage overlay) exists from API 26.
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.1.0"
+        versionCode = 4
+        versionName = "2.1.1"
         vectorDrawables.useSupportLibrary = true
     }
 

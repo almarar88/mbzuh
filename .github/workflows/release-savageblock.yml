@@ -68,14 +68,12 @@ jobs:
             echo "SB_KEY_PASS=${KEY_PASS}" >> "$GITHUB_ENV"
             echo "SB_KEY_SOURCE=secret" >> "$GITHUB_ENV"
           else
-            keytool -genkeypair -v -keystore release.jks -storetype PKCS12 \
-              -alias savageblock -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass savageblock -keypass savageblock \
-              -dname "CN=SavageBlock, OU=Alcode, O=Alcode, C=SA"
-            echo "SB_STORE_PASS=savageblock" >> "$GITHUB_ENV"
+            # Stable sideload key committed in the repo, so every release installs as an update.
+            cp keystore/savageblock-release.jks release.jks
+            echo "SB_STORE_PASS=savageblock2026" >> "$GITHUB_ENV"
             echo "SB_KEY_ALIAS=savageblock" >> "$GITHUB_ENV"
-            echo "SB_KEY_PASS=savageblock" >> "$GITHUB_ENV"
-            echo "SB_KEY_SOURCE=ephemeral" >> "$GITHUB_ENV"
+            echo "SB_KEY_PASS=savageblock2026" >> "$GITHUB_ENV"
+            echo "SB_KEY_SOURCE=repo" >> "$GITHUB_ENV"
           fi
 
       - name: فحص Lint
@@ -136,12 +134,14 @@ jobs:
             - `*-mapping.txt` — ملف R8 لفك تشفير تقارير الأعطال (ارفعه مع الـ AAB).
 
             ### التثبيت
-            1. نزّل `SavageBlock-${{ steps.ver.outputs.version }}.apk` وافتحه.
-            2. اسمح بـ «تثبيت تطبيقات من مصادر غير معروفة» إذا طلب النظام.
-            3. أعطِ التطبيق صلاحيتي **الوصول لبيانات الاستخدام** و**الظهور فوق التطبيقات** من شاشة البداية.
+            1. **لو عندك نسخة أقدم من 2.1.1** احذفها أولًا (مرة واحدة فقط؛ الإصدارات القادمة تتثبّت كتحديث).
+            2. نزّل `SavageBlock-${{ steps.ver.outputs.version }}.apk` من الجوال وافتحه من الإشعار أو من «التنزيلات».
+            3. اسمح بـ «تثبيت تطبيقات من مصادر غير معروفة» إذا طلب النظام.
+            4. لو ظهر تحذير Play Protect اختر «مزيد من التفاصيل» ثم «التثبيت على أي حال».
+            5. أعطِ التطبيق صلاحيتي **الوصول لبيانات الاستخدام** و**الظهور فوق التطبيقات** من شاشة البداية.
 
-            > التطبيق موقّع ذاتيًا (مفتاح التوقيع: ${{ env.SB_KEY_SOURCE }}). Play Protect قد يعرض تحذيرًا
-            > لأنه ليس من المتجر — اختر «تثبيت على أي حال».
+            > ملف `.aab` ليس للتثبيت على الجوال؛ هو لرفع التطبيق إلى Google Play فقط.
+            > مفتاح التوقيع: ${{ env.SB_KEY_SOURCE }}.
 
             ---
             تطوير **Alcode**

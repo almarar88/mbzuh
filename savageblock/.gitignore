@@ -11,3 +11,6 @@ captures/
 *.aab
 *.keystore
 *.jks
+
+# Committed sideload signing key (see keystore/README.md)
+!keystore/savageblock-release.jks
