@@ -99,12 +99,14 @@ fun SettingsScreen(
     onSchedule: (Schedule) -> Unit,
     onWarnAt: (Int) -> Unit,
     onStrict: () -> Unit,
+    onEmergencyUnlock: () -> Unit,
     onPermissions: () -> Unit,
     onPrivacy: () -> Unit,
     onClearHistory: () -> Unit,
 ) {
     var name by remember(settings.userName) { mutableStateOf(settings.userName) }
     var strictDialog by remember { mutableStateOf(false) }
+    var unlockDialog by remember { mutableStateOf(false) }
     var clearDialog by remember { mutableStateOf(false) }
     var timeDialog by remember { mutableStateOf<Int?>(null) } // 0 = start, 1 = end
 
@@ -276,10 +278,21 @@ fun SettingsScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(12.dp))
                 if (!settings.strictActive) {
-                    Spacer(Modifier.height(12.dp))
                     PillButton("اقفل عليّ حتى منتصف الليل", onClick = { strictDialog = true }, container = Ink, modifier = Modifier.fillMaxWidth())
+                } else {
+                    PillButton("إلغاء طارئ (فيه انتظار واعتراف)", onClick = { unlockDialog = true }, container = Surface, content = Coral, modifier = Modifier.fillMaxWidth())
                 }
+            }
+
+            // ---- FAQ
+            SoftCard(Modifier.fillMaxWidth()) {
+                SectionHeader("أسئلة شائعة")
+                Faq("كيف ألغي الحظر؟", "من الرئيسية: اقفل مفتاح «الحظر»، أو اضغط «إيقاف مؤقت» لمدة محددة، أو «إعفاء اليوم» لتطبيق واحد. ولو تبي نهائيًا احذف التطبيق من تبويب التطبيقات.")
+                Faq("ليش ما أقدر أوقف؟", "لأنك فعّلت الوضع الصارم. ينفك تلقائيًا منتصف الليل، أو استخدم «إلغاء طارئ» فوق.")
+                Faq("الشاشة ما تطلع لما أتعدى الحد", "تأكد إن المفتاح شغّال، والصلاحيتين ممنوحتين، وإن الوقت داخل أوقات التركيز لو مفعّلة، وإن التطبيق مو معفى اليوم.")
+                Faq("الدقائق ما تزيد", "صلاحية «الوصول لبيانات الاستخدام» لازم تكون مفعّلة، وبعض الأجهزة تحتاج استثناء البطارية عشان ما تقتل الخدمة.")
             }
 
             // ---- misc rows
@@ -307,6 +320,9 @@ fun SettingsScreen(
             dismissButton = { TextButton(onClick = { strictDialog = false }) { Text("تراجعت") } },
             containerColor = Surface,
         )
+    }
+    if (unlockDialog) {
+        EmergencyUnlockDialog(onDismiss = { unlockDialog = false }, onConfirm = { unlockDialog = false; onEmergencyUnlock() })
     }
     if (clearDialog) {
         AlertDialog(
@@ -336,6 +352,55 @@ fun SettingsScreen(
             containerColor = Surface,
         )
     }
+}
+
+@Composable
+private fun Faq(q: String, a: String) {
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { open = !open }.padding(vertical = 8.dp)) {
+        Text(q, style = MaterialTheme.typography.titleSmall, color = Ink)
+        if (open) {
+            Spacer(Modifier.height(4.dp))
+            Text(a, style = MaterialTheme.typography.bodySmall, color = Muted)
+        }
+    }
+}
+
+private const val UNLOCK_PHRASE = "أنا أتراجع عن وعدي"
+
+/** Strict-mode escape: 30 seconds of waiting plus a typed admission. Enough friction to think. */
+@Composable
+private fun EmergencyUnlockDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    var remaining by remember { mutableStateOf(30) }
+    var typed by remember { mutableStateOf("") }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (remaining > 0) { kotlinx.coroutines.delay(1_000); remaining-- }
+    }
+    val ok = remaining == 0 && typed.trim() == UNLOCK_PHRASE
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        title = { Text("إلغاء الوضع الصارم") },
+        text = {
+            Column {
+                Text("وعدت نفسك تكمل لمنتصف الليل. لو فعلًا مضطر، انتظر ${remaining.toArabicDigits()} ثانية واكتب:", style = MaterialTheme.typography.bodyMedium, color = Muted)
+                Spacer(Modifier.height(6.dp))
+                Text("«$UNLOCK_PHRASE»", style = MaterialTheme.typography.titleMedium, color = Coral)
+                Spacer(Modifier.height(10.dp))
+                TextField(
+                    value = typed,
+                    onValueChange = { typed = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = softFieldColors(),
+                    placeholder = { Text("اكتب الجملة", color = Muted) },
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onConfirm, enabled = ok) { Text(if (remaining > 0) "انتظر ${remaining.toArabicDigits()}" else "ألغِ الوضع الصارم", color = if (ok) Coral else Muted) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("خلاص أكمل") } },
+    )
 }
 
 @Composable

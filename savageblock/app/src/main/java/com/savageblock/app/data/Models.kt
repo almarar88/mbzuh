@@ -119,10 +119,21 @@ data class Settings(
     val strictUntil: Long = 0L,
     /** Send a heads-up notification at this percentage of an app's limit. 0 = off. */
     val warnAtPercent: Int = 80,
+    /** Epoch millis until which no strikes fire at all ("pause"). 0 = not paused. */
+    val pausedUntil: Long = 0L,
+    /** package → date key: that app is exempt from strikes for that day only. */
+    val exemptions: Map<String, String> = emptyMap(),
+    /** The "how it works" card on the home screen was dismissed. */
+    val helpDismissed: Boolean = false,
 ) {
     fun app(packageName: String): MonitoredApp? = apps.firstOrNull { it.packageName == packageName }
     val strictActive: Boolean get() = strictUntil > System.currentTimeMillis()
     val totalLimitMinutes: Int get() = apps.sumOf { it.limitMinutes }
+    val isPaused: Boolean get() = pausedUntil > System.currentTimeMillis()
+    fun isExemptToday(packageName: String): Boolean = exemptions[packageName] == todayKey()
+    /** True when strikes can actually fire right now for this app. */
+    fun blocksNow(packageName: String): Boolean =
+        monitoringEnabled && !isPaused && !isExemptToday(packageName) && schedule.isActive()
 }
 
 /** Per-day usage ledger. `seconds` is foreground time per package; `blocks` counts overlay strikes. */
@@ -165,6 +176,10 @@ fun endOfTodayMillis(): Long =
     LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
 fun LocalTime.toMinuteOfDay(): Int = hour * 60 + minute
+
+/** "٣:٤٥ م" for an epoch-millis instant in the device zone. */
+fun Long.toClockFromEpoch(): String =
+    java.time.Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalTime().toMinuteOfDay().toClock()
 
 /** Well-known time sinks, pre-selected on first launch when installed. */
 val DEFAULT_TARGETS: List<Pair<String, String>> = listOf(

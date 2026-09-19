@@ -77,6 +77,12 @@ class MonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_PAUSE) {
+            if (latestSettings?.strictActive != true) {
+                repository.updateSettingsAsync { it.copy(pausedUntil = System.currentTimeMillis() + PAUSE_FROM_NOTIFICATION_MS) }
+            }
+            return START_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             if (latestSettings?.strictActive == true) {
                 // Strict mode: the notification's Stop action is a no-op until midnight.
@@ -150,12 +156,17 @@ class MonitorService : Service() {
         val stats = repository.liveStats.value
         val used = stats.secondsFor(foreground)
         val limitSeconds = app.limitMinutes * 60L
-        val inFocusWindow = settings.schedule.isActive()
+        // Pause, today's exemption and the focus schedule all silence strikes (usage still counts).
+        val armed = settings.blocksNow(foreground)
+        if (!armed) {
+            dismissOverlay()
+            return
+        }
 
-        maybeWarn(settings, app, used, limitSeconds, inFocusWindow)
+        maybeWarn(settings, app, used, limitSeconds, true)
 
         val snoozed = (snoozeUntil[foreground] ?: 0L) > System.currentTimeMillis()
-        if (inFocusWindow && used >= limitSeconds && !overlay.isShowing && !snoozed) {
+        if (used >= limitSeconds && !overlay.isShowing && !snoozed) {
             strike(settings, app, stats)
         }
     }
@@ -262,11 +273,16 @@ class MonitorService : Service() {
             this, 1, Intent(this, MonitorService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val pauseIntent = PendingIntent.getService(
+            this, 2, Intent(this, MonitorService::class.java).setAction(ACTION_PAUSE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         return NotificationCompat.Builder(this, SavageBlockApp.MONITOR_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText("تفتح تطبيق محظور.. تنهزأ. بسيطة.")
             .setContentIntent(openAppIntent())
+            .addAction(0, getString(R.string.notification_pause), pauseIntent)
             .addAction(0, getString(R.string.notification_stop), stopIntent)
             .setOngoing(true)
             .setSilent(true)
@@ -279,6 +295,8 @@ class MonitorService : Service() {
     companion object {
         private const val ACTION_START = "com.savageblock.app.action.START"
         private const val ACTION_STOP = "com.savageblock.app.action.STOP"
+        private const val ACTION_PAUSE = "com.savageblock.app.action.PAUSE"
+        private const val PAUSE_FROM_NOTIFICATION_MS = 30 * 60_000L
         private const val NOTIFICATION_ID = 1001
         private const val WARN_NOTIFICATION_BASE = 2000
         private const val TICK_MS = 1_000L

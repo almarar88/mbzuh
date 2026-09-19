@@ -178,10 +178,15 @@ private fun SavageApp(viewModel: DashboardViewModel) {
                     serviceRunning = serviceRunning,
                     permissions = permissions,
                     contentPadding = padding,
-                    onToggleMonitoring = viewModel::setMonitoring,
+                    onToggleBlocking = viewModel::setMonitoring,
+                    onPause = { minutes -> if (minutes < 0) viewModel.pauseUntilTomorrow() else viewModel.pauseFor(minutes) },
+                    onExempt = viewModel::setExemptToday,
+                    onAddApps = { navController.navigate(Routes.SELECTOR) },
+                    onManageApps = { switchTab(Tab.APPS) },
                     onReports = { switchTab(Tab.REPORTS) },
                     onSettings = { switchTab(Tab.SETTINGS) },
                     onFixPermissions = { navController.navigate(Routes.PERMISSIONS) },
+                    onDismissHelp = viewModel::dismissHelp,
                 )
             }
             composable(Routes.APPS) {
@@ -191,6 +196,7 @@ private fun SavageApp(viewModel: DashboardViewModel) {
                     contentPadding = padding,
                     onLimit = viewModel::setLimit,
                     onRemove = viewModel::removeApp,
+                    onExempt = viewModel::setExemptToday,
                     onAdd = { navController.navigate(Routes.SELECTOR) },
                 )
             }
@@ -218,6 +224,7 @@ private fun SavageApp(viewModel: DashboardViewModel) {
                     onSchedule = viewModel::setSchedule,
                     onWarnAt = viewModel::setWarnAt,
                     onStrict = viewModel::enableStrictMode,
+                    onEmergencyUnlock = viewModel::emergencyUnlock,
                     onPermissions = { navController.navigate(Routes.PERMISSIONS) },
                     onPrivacy = {
                         runCatching {

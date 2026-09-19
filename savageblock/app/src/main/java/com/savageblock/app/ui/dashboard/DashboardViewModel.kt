@@ -127,6 +127,29 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Pause every strike for [minutes] (0 = resume now). Not available in strict mode. */
+    fun pauseFor(minutes: Int) = update { s ->
+        if (s.strictActive) s
+        else s.copy(pausedUntil = if (minutes <= 0) 0L else System.currentTimeMillis() + minutes * 60_000L)
+    }
+
+    /** Pause until local midnight. */
+    fun pauseUntilTomorrow() = update { s -> if (s.strictActive) s else s.copy(pausedUntil = endOfTodayMillis()) }
+
+    /** Lift the block for one app for the rest of today (or put it back). */
+    fun setExemptToday(packageName: String, exempt: Boolean) = update { s ->
+        if (s.strictActive) s
+        else s.copy(
+            exemptions = if (exempt) s.exemptions + (packageName to com.savageblock.app.data.todayKey())
+            else s.exemptions - packageName,
+        )
+    }
+
+    /** Strict-mode escape hatch; the UI makes the user type a phrase and wait first. */
+    fun emergencyUnlock() = update { it.copy(strictUntil = 0L) }
+
+    fun dismissHelp() = update { it.copy(helpDismissed = true) }
+
     fun clearHistory() {
         viewModelScope.launch { repository.clearHistory() }
     }

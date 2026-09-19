@@ -176,7 +176,7 @@ fun SavageOverlayContent(session: OverlaySession, onLeave: () -> Unit) {
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                "ما فيه زر رجوع. ما فيه تخطي. فيه بس إنك تقفل وتروح تشتغل.",
+                "ما فيه زر رجوع ولا تخطي. تبي ترفع الحظر فعلًا؟ من تطبيق SavageBlock: «إيقاف مؤقت» أو «إعفاء اليوم».",
                 style = MaterialTheme.typography.bodySmall,
                 color = Muted,
                 textAlign = TextAlign.Center,
